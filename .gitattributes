@@ -1,0 +1,11 @@
+* text=auto
+
+# Bash scripts and patches must stay LF (Linux CI runners)
+*.sh text eol=lf
+*.cmake text eol=lf
+*.patch text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Keep line endings explicit for these
+*.mjs text eol=lf
