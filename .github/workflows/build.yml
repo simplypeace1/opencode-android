@@ -105,9 +105,9 @@ jobs:
       - name: Install host Zig
         run: |
           cd /tmp
-          wget -q "https://ziglang.org/download/0.15.2/zig-linux-x86_64-0.15.2.tar.xz" -O zig.tar.xz
+          wget -q "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -O zig.tar.xz
           tar xf zig.tar.xz
-          sudo cp zig-linux-x86_64-0.15.2/zig /usr/local/bin/zig
+          sudo cp "zig-x86_64-linux-${ZIG_VERSION}/zig" /usr/local/bin/zig
           zig version
 
       - name: Apply patches (bun, webkit, opentui)
