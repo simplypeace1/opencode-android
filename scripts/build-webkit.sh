@@ -33,6 +33,12 @@ if [ ! -f "$DEPS_PREFIX/lib/libicuuc.a" ]; then
     exit 1
 fi
 
+# Skip if already built (cached output from a prior run)
+if [ -f "$WEBKIT_OUTPUT/lib/libJavaScriptCore.a" ]; then
+    echo ">>> WebKit/JSC already built at $WEBKIT_OUTPUT — skipping"
+    exit 0
+fi
+
 # Update toolchain with current paths
 # The toolchain file has hardcoded paths that need to be parameterized
 # We create a temporary toolchain with correct paths

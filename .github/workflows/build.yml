@@ -44,10 +44,25 @@ jobs:
       - name: Set ABI
         run: |
           echo "TARGET_ABI=${{ matrix.abi }}" >> $GITHUB_ENV
+          SLUG="${{ matrix.abi }}"
+          SLUG="${SLUG//-/_}"
+          echo "ABI_SLUG=${SLUG}" >> $GITHUB_ENV
 
       - name: Override OpenCode version
         if: github.event.inputs.opencode_version
         run: echo "OPENCODE_VERSION=${{ github.event.inputs.opencode_version }}" >> $GITHUB_ENV
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build-${{ env.ABI_SLUG }}/deps-android/prefix
+            build-${{ env.ABI_SLUG }}/webkit-android
+            build-${{ env.ABI_SLUG }}/opentui-src/packages/core/src/lib
+            build-${{ env.ABI_SLUG }}/dist
+          key: opencode-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}-${{ github.run_id }}
+          restore-keys: |
+            opencode-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}-
 
       - name: Install system packages
         run: |

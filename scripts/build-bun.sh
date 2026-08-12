@@ -22,6 +22,12 @@ source "$SCRIPT_DIR/env.sh"
 
 echo "=== Building Bun v${BUN_VERSION} for Android aarch64 ==="
 
+# Skip if already built (cached output from a prior run)
+if [ -f "$BUN_BUILD/bun" ]; then
+    echo ">>> Bun already built at $BUN_BUILD/bun — skipping"
+    exit 0
+fi
+
 # Verify prerequisites
 if [ ! -d "$BUN_SRC" ]; then
     echo "ERROR: Bun source not found. Run scripts/apply-patches.sh first."
