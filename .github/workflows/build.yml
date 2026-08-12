@@ -58,6 +58,7 @@ jobs:
             build-essential pkg-config \
             libxml2-dev libxslt1-dev \
             golang-go \
+            bison flex gperf \
             autoconf automake libtool
 
       - name: Install CMake 3.28+
@@ -97,6 +98,7 @@ jobs:
       - name: Install host Bun
         run: |
           curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
           echo "$HOME/.bun/bin" >> $GITHUB_PATH
           bun --version
 
@@ -180,9 +182,26 @@ jobs:
       - name: Copy jniLibs into APK source set
         run: |
           mkdir -p android/app/src/main/jniLibs
-          cp -r /tmp/libs/libopencode.so android/app/src/main/jniLibs/ 2>/dev/null || true
-          find /tmp/libs -name 'libopencode.so' -print
-          ls -laR /tmp/libs
+          # Artifacts may merge as <abi>/libopencode.so or flat libopencode.so;
+          # map each found binary into its ABI-specific jniLibs dir.
+          find /tmp/libs -name 'libopencode.so' -print0 | while IFS= read -r -d '' f; do
+            rel="${f#/tmp/libs/}"
+            case "$rel" in
+              arm64-v8a*) abi="arm64-v8a" ;;
+              armeabi-v7a*) abi="armeabi-v7a" ;;
+              *) abi="$(basename "$(dirname "$f")")" ;;
+            esac
+            mkdir -p "android/app/src/main/jniLibs/$abi"
+            cp "$f" "android/app/src/main/jniLibs/$abi/libopencode.so"
+            echo "placed: $abi/libopencode.so"
+          done
+          find android/app/src/main/jniLibs -type f -exec ls -la {} \;
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: Build APK
         uses: gradle/actions/setup-gradle@v4
@@ -191,9 +210,8 @@ jobs:
       - name: Gradle assemble
         working-directory: android
         run: |
-          chmod +x gradlew
-          # wrapper jar committed; gradlew.bat for Windows. Use system gradle via setup above.
-          gradle assembleDebug
+          # System gradle from setup-gradle above (wrapper .bat is Windows-only; .sh not committed).
+          gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
