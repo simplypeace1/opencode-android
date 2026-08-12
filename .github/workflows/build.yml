@@ -107,7 +107,11 @@ jobs:
           cd /tmp
           wget -q "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -O zig.tar.xz
           tar xf zig.tar.xz
-          sudo cp "zig-x86_64-linux-${ZIG_VERSION}/zig" /usr/local/bin/zig
+          # Zig resolves its install dir from the binary's realpath and needs its
+          # lib/ tree next to it. Copy the whole tree to /opt/zig, symlink bin.
+          sudo mkdir -p /opt/zig
+          sudo cp -r "zig-x86_64-linux-${ZIG_VERSION}/." /opt/zig/
+          sudo ln -sf /opt/zig/zig /usr/local/bin/zig
           zig version
 
       - name: Apply patches (bun, webkit, opentui)
