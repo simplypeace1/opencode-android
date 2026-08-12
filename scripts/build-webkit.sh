@@ -49,6 +49,16 @@ mkdir -p "$WEBKIT_BUILD"
 echo ">>> Configuring WebKit/JSC..."
 cd "$WEBKIT_BUILD"
 
+# JSC JIT is 64-bit-centric on Bun's fork. On 32-bit ARM (armeabi-v7a) the
+# baseline JIT is disabled, so FTL/DFG must be turned off or WebKit aborts:
+# "DFG and FTL JIT require baseline JIT to be enabled".
+if [ "${ANDROID_ARCH}" = "arm" ]; then
+    JIT_FLAGS="-DENABLE_DFG_JIT=OFF -DENABLE_FTL_JIT=OFF"
+else
+    JIT_FLAGS="-DENABLE_FTL_JIT=ON"
+fi
+echo ">>> JIT flags: ${JIT_FLAGS}"
+
 cmake \
     -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_TMP" \
@@ -59,7 +69,7 @@ cmake \
     -DUSE_BUN_JSC_ADDITIONS=ON \
     -DUSE_BUN_EVENT_LOOP=ON \
     -DENABLE_BUN_SKIP_FAILING_ASSERTIONS=ON \
-    -DENABLE_FTL_JIT=ON \
+    ${JIT_FLAGS} \
     -DENABLE_REMOTE_INSPECTOR=ON \
     -DALLOW_LINE_AND_COLUMN_NUMBER_IN_BUILTINS=ON \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
