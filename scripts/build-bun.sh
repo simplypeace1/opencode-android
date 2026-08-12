@@ -57,7 +57,10 @@ echo "    Symlinked $BUN_SRC/.zig-cache -> $BUN_BUILD/cache/zig/local"
 mkdir -p "$BUN_BUILD"
 
 # CMake toolchain is inside the patched Bun source
-BUN_TOOLCHAIN="$BUN_SRC/cmake/toolchains/android-aarch64.cmake"
+case "${ANDROID_ABI}" in
+  armeabi-v7a) BUN_TOOLCHAIN="$BUN_SRC/cmake/toolchains/android-armv7a.cmake" ;;
+  *)           BUN_TOOLCHAIN="$BUN_SRC/cmake/toolchains/android-aarch64.cmake" ;;
+esac
 if [ ! -f "$BUN_TOOLCHAIN" ]; then
     echo "ERROR: Android toolchain not found at $BUN_TOOLCHAIN"
     echo "       Did apply-patches.sh run successfully?"

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Environment variables for building OpenCode for Android aarch64
+# Environment variables for building OpenCode for Android (dual-ABI)
 # Source this file before running any build scripts:
-#   source scripts/env.sh
+#   TARGET_ABI=arm64-v8a source scripts/env.sh
+#   TARGET_ABI=armeabi-v7a source scripts/env.sh
 
 set -euo pipefail
 
@@ -16,12 +17,38 @@ export ZIG_VERSION="${ZIG_VERSION:-0.15.2}"
 export OPENCODE_VERSION="${OPENCODE_VERSION:-1.3.13}"
 export ANDROID_API="${ANDROID_API:-24}"
 
+# Select target ABIs, either comma-split from TARGET_ABIS or single TARGET_ABI
+# Values: arm64-v8a (aarch64), armeabi-v7a (armv7a)
+export TARGET_ABI="${TARGET_ABI:-arm64-v8a}"
+case "${TARGET_ABI}" in
+  arm64-v8a)
+    export ANDROID_ABI=arm64-v8a
+    export ANDROID_ARCH=aarch64
+    export ANDROID_TRIPLE="aarch64-linux-android"
+    ;;
+  armeabi-v7a)
+    export ANDROID_ABI=armeabi-v7a
+    export ANDROID_ARCH=arm
+    export ANDROID_TRIPLE="armv7a-linux-androideabi"
+    ;;
+  *)
+    echo "ERROR: Unknown TARGET_ABI '${TARGET_ABI}' (use arm64-v8a or armeabi-v7a)" >&2
+    exit 1
+    ;;
+esac
+export ANDROID_TRIPLE_API="${ANDROID_TRIPLE}${ANDROID_API}"
+
+# WebKit toolchain env overrides (defaults to aarch64 inside the cmake file)
+if [ "${ANDROID_ARCH}" = "arm" ]; then
+    export WEBKIT_SYSTEM_PROCESSOR=${ANDROID_ARCH}v7a
+    export WEBKIT_ANDROID_TRIPLE=${ANDROID_TRIPLE}
+else
+    export WEBKIT_SYSTEM_PROCESSOR=${ANDROID_ARCH}
+    export WEBKIT_ANDROID_TRIPLE=${ANDROID_TRIPLE}
+fi
+
 # Android NDK
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-/opt/android-ndk}"
-export ANDROID_ABI=arm64-v8a
-export ANDROID_ARCH=aarch64
-export ANDROID_TRIPLE="aarch64-linux-android"
-export ANDROID_TRIPLE_API="${ANDROID_TRIPLE}${ANDROID_API}"
 
 # NDK toolchain paths
 export NDK_TOOLCHAIN="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
@@ -34,8 +61,9 @@ export ANDROID_STRIP="${NDK_TOOLCHAIN}/bin/llvm-strip"
 export ANDROID_NM="${NDK_TOOLCHAIN}/bin/llvm-nm"
 export ANDROID_LD="${NDK_TOOLCHAIN}/bin/ld.lld"
 
-# Build directories (all relative to REPO_ROOT)
-export WORK_DIR="${WORK_DIR:-${REPO_ROOT}/build}"
+# Build directories (ABI-suffixed so arm64 and armv7 builds don't collide)
+export ABI_SLUG="${ANDROID_ABI//-/_}"
+export WORK_DIR="${WORK_DIR:-${REPO_ROOT}/build-${ABI_SLUG}}"
 export BUN_SRC="${WORK_DIR}/bun-src"
 export WEBKIT_SRC="${WORK_DIR}/webkit-src"
 export OPENTUI_SRC="${WORK_DIR}/opentui-src"

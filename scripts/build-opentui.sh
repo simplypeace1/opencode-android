@@ -46,18 +46,18 @@ if [ ! -f "$OPENTUI_ZIG_DIR/build.zig" ]; then
     exit 1
 fi
 
-echo ">>> Building with Zig (target: aarch64-linux-android)..."
+echo ">>> Building with Zig (target: ${ANDROID_TRIPLE})..."
 cd "$OPENTUI_ZIG_DIR"
 
 "$ZIG_BIN" build \
-    -Dtarget=aarch64-linux-android \
+    -Dtarget=${ANDROID_TRIPLE} \
     -Doptimize=ReleaseSafe \
     --prefix . 2>&1
 
 # The build.zig installs to dest_dir="../lib/{output_name}" relative to
 # the --prefix dir.  With --prefix=. (= OPENTUI_ZIG_DIR), the .so ends
 # up one directory above: packages/core/src/lib/aarch64-linux-android/
-LIBOPENTUI="$OPENTUI_ZIG_DIR/../lib/aarch64-linux-android/libopentui.so"
+LIBOPENTUI="$OPENTUI_ZIG_DIR/../lib/${ANDROID_TRIPLE}/libopentui.so"
 if [ ! -f "$LIBOPENTUI" ]; then
     echo "ERROR: libopentui.so not found"
     echo "  Expected at: $LIBOPENTUI"

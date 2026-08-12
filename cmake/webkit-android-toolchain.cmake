@@ -5,14 +5,23 @@
 # preprocessor level, which the NDK compiler defines automatically.
 
 set(CMAKE_SYSTEM_NAME Linux)
-set(CMAKE_SYSTEM_PROCESSOR aarch64)
+# Default processor/triple are aarch64; override via env for armeabi-v7a
+if(NOT DEFINED ENV{WEBKIT_SYSTEM_PROCESSOR})
+    set(CMAKE_SYSTEM_PROCESSOR aarch64)
+else()
+    set(CMAKE_SYSTEM_PROCESSOR "$ENV{WEBKIT_SYSTEM_PROCESSOR}")
+endif()
 
 # Android NDK paths
 if(NOT DEFINED ANDROID_NDK_HOME)
     set(ANDROID_NDK_HOME "/home/guy/Android/Sdk/ndk/28.1.13356709")
 endif()
 set(ANDROID_API 24)
-set(ANDROID_TRIPLE "aarch64-linux-android")
+if(NOT DEFINED ENV{WEBKIT_ANDROID_TRIPLE})
+    set(ANDROID_TRIPLE "aarch64-linux-android")
+else()
+    set(ANDROID_TRIPLE "$ENV{WEBKIT_ANDROID_TRIPLE}")
+endif()
 set(ANDROID_TRIPLE_API "${ANDROID_TRIPLE}${ANDROID_API}")
 
 set(NDK_TOOLCHAIN "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64")

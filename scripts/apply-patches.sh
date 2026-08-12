@@ -31,6 +31,11 @@ cd "$BUN_SRC"
 git checkout -- . 2>/dev/null || true  # Reset any previous patches
 git apply --stat "$REPO_ROOT/patches/bun/android-support.patch"
 git apply "$REPO_ROOT/patches/bun/android-support.patch"
+# Apply armeabi-v7a toolchain patch (adds cmake/toolchains/android-armv7a.cmake)
+if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
+    echo ">>> Applying Bun armeabi-v7a toolchain patch..."
+    git apply "$REPO_ROOT/patches/bun/android-armv7a-toolchain.patch"
+fi
 echo "    Bun patches applied successfully"
 
 # --- Clone WebKit ---
