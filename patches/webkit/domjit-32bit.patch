@@ -1,5 +1,5 @@
 ﻿diff --git a/Source/JavaScriptCore/domjit/DOMJITEffect.h b/Source/JavaScriptCore/domjit/DOMJITEffect.h
-index 36a1a59..6baa0e3 100644
+index 6ba8511..e9c9665 100644
 --- a/Source/JavaScriptCore/domjit/DOMJITEffect.h
 +++ b/Source/JavaScriptCore/domjit/DOMJITEffect.h
 @@ -44,6 +44,7 @@ struct Effect {
@@ -26,8 +26,16 @@ index 36a1a59..6baa0e3 100644
      constexpr bool isTop() const
      {
          return domWrites == HeapRange::top() ||
-@@ -98,6 +101,7 @@ struct Effect {
+@@ -92,12 +95,15 @@ struct Effect {
+             writes[2] == DFG::Heap ||
+             writes[3] == DFG::Heap;
+     }
++#endif
+ 
+     HeapRange domReads { HeapRange::top() };
+     HeapRange domWrites { HeapRange::top() };
      HeapRange def { HeapRange::top() };
++#if ENABLE(DFG_JIT)
      DFG::AbstractHeapKind reads[4] { DFG::InvalidAbstractHeap };
      DFG::AbstractHeapKind writes[4] { DFG::InvalidAbstractHeap };
 +#endif

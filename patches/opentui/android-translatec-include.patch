@@ -1,5 +1,5 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..71b411c 100644
+index ed85ddf..d8c3a37 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
 @@ -411,6 +411,14 @@ fn addTranslatedCImports(
@@ -9,7 +9,7 @@ index ed85ddf..71b411c 100644
 +
 +    // On Android, Zig bundles glibc/musl headers but not bionic. translate-c
 +    // needs the NDK sysroot include dir to resolve pthread.h/math.h.
-+    if (std.process.getEnvVarOwned(b.allocator, "ANDROID_NDK_HOME") catch null) |ndk_home| {
++    if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk_home| {
 +        const sysroot_include = b.pathJoin(&.{ ndk_home, "toolchains", "llvm", "prebuilt", "linux-x86_64", "sysroot", "usr", "include" });
 +        miniaudio_translate.addSystemIncludePath(.{ .cwd_relative = sysroot_include });
 +    }
@@ -21,7 +21,7 @@ index ed85ddf..71b411c 100644
          .optimize = optimize,
      });
      yoga_translate.addIncludePath(yoga_dep.path(""));
-+    if (std.process.getEnvVarOwned(b.allocator, "ANDROID_NDK_HOME") catch null) |ndk_home| {
++    if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk_home| {
 +        const sysroot_include = b.pathJoin(&.{ ndk_home, "toolchains", "llvm", "prebuilt", "linux-x86_64", "sysroot", "usr", "include" });
 +        yoga_translate.addSystemIncludePath(.{ .cwd_relative = sysroot_include });
 +    }

@@ -1,5 +1,5 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..12b6aa1 100644
+index ed85ddf..f3c374c 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
 @@ -731,6 +731,29 @@ fn buildTarget(
@@ -13,10 +13,10 @@ index ed85ddf..12b6aa1 100644
 +    const abi = target.result.abi;
 +    if (os_tag == .linux and (abi == .android or abi == .androideabi)) {
 +        const ndk_lib: ?[]const u8 = blk: {
-+            if (std.process.getEnvVarOwned(b.allocator, "ANDROID_NDK_LIB_DIR") catch null) |dir| {
++            if (b.graph.environ_map.get("ANDROID_NDK_LIB_DIR")) |dir| {
 +                break :blk dir;
 +            }
-+            if (std.process.getEnvVarOwned(b.allocator, "ANDROID_NDK_HOME") catch null) |ndk_home| {
++            if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk_home| {
 +                break :blk std.fmt.allocPrint(b.allocator, "{s}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24", .{ndk_home}) catch null;
 +            }
 +            break :blk null;
