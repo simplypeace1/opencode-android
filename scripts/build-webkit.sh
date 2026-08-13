@@ -59,7 +59,7 @@ cd "$WEBKIT_BUILD"
 # baseline JIT is disabled, so FTL/DFG must be turned off or WebKit aborts:
 # "DFG and FTL JIT require baseline JIT to be enabled".
 if [ "${ANDROID_ARCH}" = "arm" ]; then
-    JIT_FLAGS="-DENABLE_DFG_JIT=OFF -DENABLE_FTL_JIT=OFF"
+    JIT_FLAGS="-DENABLE_DFG_JIT=OFF -DENABLE_FTL_JIT=OFF -DENABLE_DOMJIT=OFF"
 else
     JIT_FLAGS="-DENABLE_FTL_JIT=ON"
 fi
