@@ -24,20 +24,28 @@ else
     echo ">>> opentui source exists at $OPENTUI_SRC"
 fi
 
-# Apply Android libc linking patch
+# Apply opentui Android patches. Note: `zig build --libc` only affects the
+# linking phase (b.libc_file); the translate-c pass ignores it, so we also add
+# the NDK sysroot include dir to the translate-c steps via a separate patch.
+apply_opentui_patch() {
+    local patch_path="$1"
+    if [ -f "$patch_path" ]; then
+        echo ">>> Applying opentui Android patch: $(basename "$patch_path")"
+        cd "$OPENTUI_SRC"
+        if ! git apply --check "$patch_path" 2>/dev/null; then
+            echo "    Patch already applied or does not apply cleanly, skipping"
+        else
+            git apply "$patch_path"
+            echo "    Patch applied successfully"
+        fi
+    fi
+}
+
 # Without this patch, the .so won't have NEEDED: libc.so, and Android's
 # dlopen() will fail because it can't resolve symbols like getauxval.
-OPENTUI_PATCH="$REPO_ROOT/patches/opentui/android-libc-link.patch"
-if [ -f "$OPENTUI_PATCH" ]; then
-    echo ">>> Applying opentui Android patch..."
-    cd "$OPENTUI_SRC"
-    if ! git apply --check "$OPENTUI_PATCH" 2>/dev/null; then
-        echo "    Patch already applied or does not apply cleanly, skipping"
-    else
-        git apply "$OPENTUI_PATCH"
-        echo "    Patch applied successfully"
-    fi
-fi
+apply_opentui_patch "$REPO_ROOT/patches/opentui/android-libc-link.patch"
+# Without this patch, translate-c fails on bionic headers (pthread.h/math.h).
+apply_opentui_patch "$REPO_ROOT/patches/opentui/android-translatec-include.patch"
 
 OPENTUI_ZIG_DIR="$OPENTUI_SRC/packages/core/src/zig"
 
@@ -46,10 +54,35 @@ if [ ! -f "$OPENTUI_ZIG_DIR/build.zig" ]; then
     exit 1
 fi
 
+# Skip if already built (cached output from a prior run)
+LIBOPENTUI_CACHED="$OPENTUI_ZIG_DIR/../lib/${ANDROID_TRIPLE}/libopentui.so"
+if [ -f "$LIBOPENTUI_CACHED" ]; then
+    echo ">>> libopentui.so already built at $LIBOPENTUI_CACHED — skipping"
+    exit 0
+fi
+
 echo ">>> Building with Zig (target: ${ANDROID_TRIPLE})..."
 cd "$OPENTUI_ZIG_DIR"
 
+# `zig build --libc` tells the linker where bionic crt/libc live (via
+# b.libc_file). Translate-c ignores it — handled by the patch above.
+NDK_HOME="${ANDROID_NDK_HOME:-/opt/android-ndk}"
+NDK_SYSROOT="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+# NDK sysroot lib dirs use arm-linux-androideabi (not the armv7a- clang prefix)
+LIBC_TRIPLE="${ANDROID_TRIPLE/armv7a-/arm-}"
+LIBC_FILE="$BUN_BUILD/zig-android-libc.txt"
+mkdir -p "$(dirname "$LIBC_FILE")"
+cat > "$LIBC_FILE" <<EOF
+include_dir=$NDK_SYSROOT/usr/include
+sys_include_dir=$NDK_SYSROOT/usr/include
+crt_dir=$NDK_SYSROOT/usr/lib/${LIBC_TRIPLE}/${ANDROID_API}
+static_crt_dir=$NDK_SYSROOT/usr/lib/${LIBC_TRIPLE}/${ANDROID_API}
+EOF
+echo ">>> NDK libc file: $LIBC_FILE"
+cat "$LIBC_FILE"
+
 "$ZIG_BIN" build \
+    --libc "$LIBC_FILE" \
     -Dtarget=${ANDROID_TRIPLE} \
     -Doptimize=ReleaseSafe \
     --prefix . 2>&1

@@ -1,0 +1,36 @@
+﻿diff --git a/Source/JavaScriptCore/domjit/DOMJITEffect.h b/Source/JavaScriptCore/domjit/DOMJITEffect.h
+index 36a1a59..6baa0e3 100644
+--- a/Source/JavaScriptCore/domjit/DOMJITEffect.h
++++ b/Source/JavaScriptCore/domjit/DOMJITEffect.h
+@@ -44,6 +44,7 @@ struct Effect {
+         return { readRange, HeapRange::none() };
+     }
+ 
++#if ENABLE(DFG_JIT)
+     constexpr static Effect forReadKinds(DFG::AbstractHeapKind read1 = DFG::InvalidAbstractHeap, DFG::AbstractHeapKind read2 = DFG::InvalidAbstractHeap, DFG::AbstractHeapKind read3 = DFG::InvalidAbstractHeap, DFG::AbstractHeapKind read4 = DFG::InvalidAbstractHeap)
+     {
+         return { HeapRange::none(), HeapRange::none(), HeapRange::none(), { read1, read2, read3, read4 } };
+@@ -58,6 +59,7 @@ struct Effect {
+     {
+         return { HeapRange::none(), HeapRange::none(), HeapRange::none(), { reads[0], reads[1], reads[2], reads[3] }, { writes[0], writes[1], writes[2], writes[3] } };
+     }
++#endif
+ 
+     constexpr static Effect forReadWrite(HeapRange readRange, HeapRange writeRange)
+     {
+@@ -84,6 +86,7 @@ struct Effect {
+         return !!domWrites;
+     }
+ 
++#if ENABLE(DFG_JIT)
+     constexpr bool isTop() const
+     {
+         return domWrites == HeapRange::top() ||
+@@ -98,6 +101,7 @@ struct Effect {
+     HeapRange def { HeapRange::top() };
+     DFG::AbstractHeapKind reads[4] { DFG::InvalidAbstractHeap };
+     DFG::AbstractHeapKind writes[4] { DFG::InvalidAbstractHeap };
++#endif
+ };
+ 
+ }

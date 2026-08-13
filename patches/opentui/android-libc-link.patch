@@ -1,8 +1,8 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index 5a8bcb8..b1d4642 100644
+index ed85ddf..12b6aa1 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -273,6 +273,29 @@ fn buildTarget(
+@@ -731,6 +731,29 @@ fn buildTarget(
          .linkage = .dynamic,
      });
  
@@ -29,6 +29,6 @@ index 5a8bcb8..b1d4642 100644
 +        }
 +    }
 +
-     const install_dir = b.addInstallArtifact(lib, .{
-         .dest_dir = .{
-             .override = .{
+     addNativeAudioDependencies(b, module, target, macos_sdk_path);
+     addYogaDependencies(b, module);
+ 

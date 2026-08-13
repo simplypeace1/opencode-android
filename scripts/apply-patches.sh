@@ -51,12 +51,12 @@ else
     echo ">>> WebKit source already exists at $WEBKIT_SRC"
 fi
 
-# Apply WebKit patch
+# Apply WebKit patches
 echo ">>> Applying WebKit Android patches..."
 cd "$WEBKIT_SRC"
 git checkout -- . 2>/dev/null || true  # Reset any previous patches
-git apply --stat "$REPO_ROOT/patches/webkit/android-support.patch"
 git apply "$REPO_ROOT/patches/webkit/android-support.patch"
+git apply "$REPO_ROOT/patches/webkit/domjit-32bit.patch"
 echo "    WebKit patches applied successfully"
 
 echo ""
