@@ -46,6 +46,8 @@ apply_opentui_patch() {
 apply_opentui_patch "$REPO_ROOT/patches/opentui/android-libc-link.patch"
 # Without this patch, translate-c fails on bionic headers (pthread.h/math.h).
 apply_opentui_patch "$REPO_ROOT/patches/opentui/android-translatec-include.patch"
+# Applies -Dcpu features (ZIG_CPU) to the Zig target query for armeabi-v7a.
+apply_opentui_patch "$REPO_ROOT/patches/opentui/android-cpu-features.patch"
 
 OPENTUI_ZIG_DIR="$OPENTUI_SRC/packages/core/src/zig"
 
@@ -54,10 +56,13 @@ if [ ! -f "$OPENTUI_ZIG_DIR/build.zig" ]; then
     exit 1
 fi
 
-# Skip if already built (cached output from a prior run)
-LIBOPENTUI_CACHED="$OPENTUI_ZIG_DIR/../lib/${ANDROID_TRIPLE}/libopentui.so"
+# Skip if already built (cached output from a prior run).
+# Note: build.zig installs to ../lib/{output_name} where output_name is the
+# -Dtarget string (ZIG_TARGET), NOT the NDK/clang triple (ANDROID_TRIPLE).
+ZIG_TARGET="${ZIG_TARGET:-${ANDROID_TRIPLE}}"
+LIBOPENTUI_CACHED="$OPENTUI_ZIG_DIR/../lib/${ZIG_TARGET}/libopentui.so"
 CACHE_DIR="$WORK_DIR/opentui-lib"
-CACHED_LIB="$CACHE_DIR/${ANDROID_TRIPLE}/libopentui.so"
+CACHED_LIB="$CACHE_DIR/${ZIG_TARGET}/libopentui.so"
 if [ -f "$CACHED_LIB" ]; then
     echo ">>> Restoring cached libopentui.so from $CACHED_LIB"
     mkdir -p "$(dirname "$LIBOPENTUI_CACHED")"
@@ -70,36 +75,47 @@ if [ -f "$LIBOPENTUI_CACHED" ]; then
     exit 0
 fi
 
-echo ">>> Building with Zig (target: ${ANDROID_TRIPLE})..."
+echo ">>> Building with Zig (target: ${ZIG_TARGET:-${ANDROID_TRIPLE}})..."
 cd "$OPENTUI_ZIG_DIR"
 
-# `zig build --libc` tells the linker where bionic crt/libc live (via
-# b.libc_file). Translate-c ignores it — handled by the patch above.
 NDK_HOME="${ANDROID_NDK_HOME:-/opt/android-ndk}"
 NDK_SYSROOT="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
 # NDK sysroot lib dirs use arm-linux-androideabi (not the armv7a- clang prefix)
 LIBC_TRIPLE="${ANDROID_TRIPLE/armv7a-/arm-}"
 LIBC_FILE="$BUN_BUILD/zig-android-libc.txt"
 mkdir -p "$(dirname "$LIBC_FILE")"
+# Zig 0.16's LibCInstallation parser requires ALL 6 keys present as lines
+# (only value-emptiness is OS-conditional). Missing keys => ParseError.
 cat > "$LIBC_FILE" <<EOF
 include_dir=$NDK_SYSROOT/usr/include
 sys_include_dir=$NDK_SYSROOT/usr/include
 crt_dir=$NDK_SYSROOT/usr/lib/${LIBC_TRIPLE}/${ANDROID_API}
-static_crt_dir=$NDK_SYSROOT/usr/lib/${LIBC_TRIPLE}/${ANDROID_API}
+msvc_lib_dir=
+kernel32_lib_dir=
+gcc_dir=
 EOF
 echo ">>> NDK libc file: $LIBC_FILE"
 cat "$LIBC_FILE"
 
+# The libc file is passed ONLY to the cross-compiled lib via setLibCFile in
+# android-libc-link.patch (reads ANDROID_NDK_LIBC_FILE). Do NOT use the global
+# `zig build --libc` flag: it propagates into dependency sub-builds (uucode's
+# native host tool uucode_generate) and breaks them.
+export ANDROID_NDK_LIBC_FILE="$LIBC_FILE"
+
+# ZIG_CPU is consumed inside build.zig via android-cpu-features.patch
+# (reads the ZIG_CPU env var). Do NOT pass -Dcpu on the CLI: opentui's
+# build.zig doesn't call standardTargetOptions, so -Dcpu is an unregistered
+# option and `zig build` would reject it.
 "$ZIG_BIN" build \
-    --libc "$LIBC_FILE" \
-    -Dtarget=${ANDROID_TRIPLE} \
+    -Dtarget="${ZIG_TARGET:-${ANDROID_TRIPLE}}" \
     -Doptimize=ReleaseSafe \
     --prefix . 2>&1
 
 # The build.zig installs to dest_dir="../lib/{output_name}" relative to
 # the --prefix dir.  With --prefix=. (= OPENTUI_ZIG_DIR), the .so ends
 # up one directory above: packages/core/src/lib/aarch64-linux-android/
-LIBOPENTUI="$OPENTUI_ZIG_DIR/../lib/${ANDROID_TRIPLE}/libopentui.so"
+LIBOPENTUI="$OPENTUI_ZIG_DIR/../lib/${ZIG_TARGET}/libopentui.so"
 if [ ! -f "$LIBOPENTUI" ]; then
     echo "ERROR: libopentui.so not found"
     echo "  Expected at: $LIBOPENTUI"
@@ -126,6 +142,6 @@ else
 fi
 
 # Stage the built .so into the cache dir so a resumed run skips the rebuild
-mkdir -p "$CACHE_DIR/${ANDROID_TRIPLE}"
+mkdir -p "$CACHE_DIR/${ZIG_TARGET}"
 cp "$LIBOPENTUI" "$CACHED_LIB"
 echo ">>> Staged libopentui.so into $CACHED_LIB for cache resume"

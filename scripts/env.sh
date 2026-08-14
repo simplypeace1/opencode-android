@@ -25,11 +25,20 @@ case "${TARGET_ABI}" in
     export ANDROID_ABI=arm64-v8a
     export ANDROID_ARCH=aarch64
     export ANDROID_TRIPLE="aarch64-linux-android"
+    # Zig target string for the opentui build (arch name Zig 0.16 accepts).
+    # arm64 generic baseline already matches the ABI, so no CPU override:
+    # leave ZIG_CPU unset (build.zig reads it; null => arch default).
+    export ZIG_TARGET="aarch64-linux-android"
+    unset ZIG_CPU
     ;;
   armeabi-v7a)
     export ANDROID_ABI=armeabi-v7a
     export ANDROID_ARCH=arm
     export ANDROID_TRIPLE="armv7a-linux-androideabi"
+    # Zig 0.16 has no "armv7a" arch name; use "arm". Baseline ARM has no
+    # v7a/VFP features, so pin the NDK-matching CPU model explicitly.
+    export ZIG_TARGET="arm-linux-androideabi"
+    export ZIG_CPU="generic+v7a+vfp3d16"
     ;;
   *)
     echo "ERROR: Unknown TARGET_ABI '${TARGET_ABI}' (use arm64-v8a or armeabi-v7a)" >&2

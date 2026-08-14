@@ -1,8 +1,8 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..888e718 100644
+index ed85ddf..1ae4e83 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -731,6 +731,43 @@ fn buildTarget(
+@@ -731,6 +731,52 @@ fn buildTarget(
          .linkage = .dynamic,
      });
  
@@ -40,6 +40,15 @@ index ed85ddf..888e718 100644
 +                const libc_path = std.fmt.allocPrint(b.allocator, "{s}/libc.so", .{dir}) catch unreachable;
 +                lib.root_module.addObjectFile(.{ .cwd_relative = libc_path });
 +            }
++        }
++
++        // Pass the bionic libc paths file to ONLY this cross-compiled library
++        // via setLibCFile, so the linker can find crt_dir/crtbegin_so.o etc.
++        // Do NOT use the global `zig build --libc` flag: it propagates into
++        // dependency sub-builds (e.g. uucode's native host tool
++        // uucode_generate) and breaks them with libc parse errors.
++        if (b.graph.environ_map.get("ANDROID_NDK_LIBC_FILE")) |libc_file| {
++            lib.setLibCFile(.{ .cwd_relative = libc_file });
 +        }
 +    }
 +

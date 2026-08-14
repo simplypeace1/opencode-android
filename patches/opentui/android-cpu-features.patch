@@ -1,0 +1,18 @@
+diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
+index ed85ddf..c732a06 100644
+--- a/packages/core/src/zig/build.zig
++++ b/packages/core/src/zig/build.zig
+@@ -709,7 +709,12 @@ fn buildTarget(
+     build_options: *std.Build.Step.Options,
+     macos_sdk_path: ?[]const u8,
+ ) !void {
+-    const target_query = try std.Target.Query.parse(.{ .arch_os_abi = zig_target });
++    // Optional CPU model + feature string (e.g. "generic+v7a+vfp3d16") from
++    // the ZIG_CPU env var. Query.ParseOptions.cpu_features accepts exactly
++    // this "name+feature-feature" syntax and populates cpu_features_add/sub
++    // internally. null (env unset) => arch default resolution (arm64).
++    const cpu_features = b.graph.environ_map.get("ZIG_CPU");
++    const target_query = try std.Target.Query.parse(.{ .arch_os_abi = zig_target, .cpu_features = cpu_features });
+     const target = b.resolveTargetQuery(target_query);
+ 
+     if (target.result.os.tag == .macos and macos_sdk_path == null) {

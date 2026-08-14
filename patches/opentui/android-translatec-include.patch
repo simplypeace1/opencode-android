@@ -1,8 +1,8 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..d8c3a37 100644
+index ed85ddf..191978a 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -411,6 +411,14 @@ fn addTranslatedCImports(
+@@ -411,6 +411,27 @@ fn addTranslatedCImports(
          .optimize = optimize,
      });
      miniaudio_translate.addIncludePath(b.path("."));
@@ -12,18 +12,42 @@ index ed85ddf..d8c3a37 100644
 +    if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk_home| {
 +        const sysroot_include = b.pathJoin(&.{ ndk_home, "toolchains", "llvm", "prebuilt", "linux-x86_64", "sysroot", "usr", "include" });
 +        miniaudio_translate.addSystemIncludePath(.{ .cwd_relative = sysroot_include });
++        // Arch-specific bionic headers (asm/ etc.) live in the triple subdir;
++        // clang adds it automatically, translate-c needs it explicitly.
++        const arch_triple = switch (target.result.cpu.arch) {
++            .aarch64 => "aarch64-linux-android",
++            .arm => "arm-linux-androideabi",
++            .x86 => "i686-linux-android",
++            .x86_64 => "x86_64-linux-android",
++            else => null,
++        };
++        if (arch_triple) |triple| {
++            const triple_include = b.pathJoin(&.{ sysroot_include, triple });
++            miniaudio_translate.addSystemIncludePath(.{ .cwd_relative = triple_include });
++        }
 +    }
 +
      module.addImport("miniaudio", miniaudio_translate.createModule());
  
      const yoga_dep = b.dependency("yoga", .{});
-@@ -420,6 +428,10 @@ fn addTranslatedCImports(
+@@ -420,6 +441,21 @@ fn addTranslatedCImports(
          .optimize = optimize,
      });
      yoga_translate.addIncludePath(yoga_dep.path(""));
 +    if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk_home| {
 +        const sysroot_include = b.pathJoin(&.{ ndk_home, "toolchains", "llvm", "prebuilt", "linux-x86_64", "sysroot", "usr", "include" });
 +        yoga_translate.addSystemIncludePath(.{ .cwd_relative = sysroot_include });
++        const arch_triple = switch (target.result.cpu.arch) {
++            .aarch64 => "aarch64-linux-android",
++            .arm => "arm-linux-androideabi",
++            .x86 => "i686-linux-android",
++            .x86_64 => "x86_64-linux-android",
++            else => null,
++        };
++        if (arch_triple) |triple| {
++            const triple_include = b.pathJoin(&.{ sysroot_include, triple });
++            yoga_translate.addSystemIncludePath(.{ .cwd_relative = triple_include });
++        }
 +    }
      module.addImport("yoga", yoga_translate.createModule());
  }
