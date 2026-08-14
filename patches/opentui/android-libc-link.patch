@@ -1,8 +1,8 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..f3c374c 100644
+index ed85ddf..888e718 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -731,6 +731,29 @@ fn buildTarget(
+@@ -731,6 +731,43 @@ fn buildTarget(
          .linkage = .dynamic,
      });
  
@@ -12,20 +12,34 @@ index ed85ddf..f3c374c 100644
 +    const os_tag = target.result.os.tag;
 +    const abi = target.result.abi;
 +    if (os_tag == .linux and (abi == .android or abi == .androideabi)) {
-+        const ndk_lib: ?[]const u8 = blk: {
-+            if (b.graph.environ_map.get("ANDROID_NDK_LIB_DIR")) |dir| {
-+                break :blk dir;
-+            }
-+            if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk_home| {
-+                break :blk std.fmt.allocPrint(b.allocator, "{s}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24", .{ndk_home}) catch null;
-+            }
-+            break :blk null;
++        const arch_dir: ?[]const u8 = switch (target.result.cpu.arch) {
++            .aarch64 => "aarch64-linux-android",
++            .arm => "arm-linux-androideabi",
++            .x86 => "i686-linux-android",
++            .x86_64 => "x86_64-linux-android",
++            else => null,
 +        };
-+        if (ndk_lib) |dir| {
-+            // Use addObjectFile to directly link the libc.so stub without triggering
-+            // Zig's native libc provision
-+            const libc_path = std.fmt.allocPrint(b.allocator, "{s}/libc.so", .{dir}) catch unreachable;
-+            lib.addObjectFile(.{ .cwd_relative = libc_path });
++        if (arch_dir) |dir_name| {
++            const ndk_lib: ?[]const u8 = blk: {
++                if (b.graph.environ_map.get("ANDROID_NDK_LIB_DIR")) |dir| {
++                    break :blk dir;
++                }
++                if (b.graph.environ_map.get("ANDROID_NDK_HOME")) |ndk_home| {
++                    break :blk std.fmt.allocPrint(
++                        b.allocator,
++                        "{s}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/{s}/24",
++                        .{ ndk_home, dir_name },
++                    ) catch null;
++                }
++                break :blk null;
++            };
++            if (ndk_lib) |dir| {
++                // Directly add the libc.so stub as an object-file link input so
++                // it is linked (DT_NEEDED) without triggering Zig's native
++                // libc provisioning.
++                const libc_path = std.fmt.allocPrint(b.allocator, "{s}/libc.so", .{dir}) catch unreachable;
++                lib.root_module.addObjectFile(.{ .cwd_relative = libc_path });
++            }
 +        }
 +    }
 +
