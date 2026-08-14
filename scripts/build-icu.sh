@@ -13,6 +13,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
+# The cross-compiled static libs (and headers) live in $DEPS_PREFIX, which is
+# restored from the CI cache (build-<ABI>/deps-android/prefix). If they are
+# present, everything downstream (source download, host tools, cross-build) is
+# unnecessary, so exit early. Host ICU tools are only needed to produce these
+# libs; WebKit consumes only $DEPS_PREFIX.
+if [ -f "$DEPS_PREFIX/lib/libicuuc.a" ]; then
+    echo "=== ICU ${ICU_VERSION} already built at $DEPS_PREFIX (cache hit), skipping ==="
+    exit 0
+fi
+
 ICU_VERSION_UNDERSCORE="${ICU_VERSION//./_}"
 ICU_TARBALL="icu4c-${ICU_VERSION_UNDERSCORE}-src.tgz"
 ICU_URL="https://github.com/unicode-org/icu/releases/download/release-${ICU_VERSION_UNDERSCORE//_/-}/${ICU_TARBALL}"
