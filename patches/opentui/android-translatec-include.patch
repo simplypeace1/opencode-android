@@ -1,8 +1,8 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..191978a 100644
+index ed85ddf..e8f0a14 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -411,6 +411,27 @@ fn addTranslatedCImports(
+@@ -411,6 +411,35 @@ fn addTranslatedCImports(
          .optimize = optimize,
      });
      miniaudio_translate.addIncludePath(b.path("."));
@@ -25,12 +25,20 @@ index ed85ddf..191978a 100644
 +            const triple_include = b.pathJoin(&.{ sysroot_include, triple });
 +            miniaudio_translate.addSystemIncludePath(.{ .cwd_relative = triple_include });
 +        }
++        // bionic headers (sys/time.h utimes/futimes/...) use the clang
++        // nullability keywords _Nullable/_Nonnull/_Null_unspecified inside
++        // array parameter bounds, which Zig 0.16's translate-c rejects.
++        // Strip them at the preprocessor stage; translate-c doesn't use the
++        // nullness info anyway.
++        miniaudio_translate.defineCMacro("_Nullable", "");
++        miniaudio_translate.defineCMacro("_Nonnull", "");
++        miniaudio_translate.defineCMacro("_Null_unspecified", "");
 +    }
 +
      module.addImport("miniaudio", miniaudio_translate.createModule());
  
      const yoga_dep = b.dependency("yoga", .{});
-@@ -420,6 +441,21 @@ fn addTranslatedCImports(
+@@ -420,6 +449,24 @@ fn addTranslatedCImports(
          .optimize = optimize,
      });
      yoga_translate.addIncludePath(yoga_dep.path(""));
@@ -48,6 +56,9 @@ index ed85ddf..191978a 100644
 +            const triple_include = b.pathJoin(&.{ sysroot_include, triple });
 +            yoga_translate.addSystemIncludePath(.{ .cwd_relative = triple_include });
 +        }
++        yoga_translate.defineCMacro("_Nullable", "");
++        yoga_translate.defineCMacro("_Nonnull", "");
++        yoga_translate.defineCMacro("_Null_unspecified", "");
 +    }
      module.addImport("yoga", yoga_translate.createModule());
  }
