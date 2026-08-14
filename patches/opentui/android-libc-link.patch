@@ -1,8 +1,21 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..d550c72 100644
+index ed85ddf..623d05e 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -731,6 +731,57 @@ fn buildTarget(
+@@ -367,7 +367,11 @@ fn addNativeAudioDependencies(
+         .macos => addMacOSSystemLibraries(b, module, macos_sdk_path.?),
+         .linux => {
+             module.linkSystemLibrary("dl", .{});
+-            module.linkSystemLibrary("pthread", .{});
++            // Android's bionic merges pthreads into libc; there is no
++            // libpthread.so in the NDK r28b sysroot, so skip -lpthread.
++            if (target.result.abi != .android and target.result.abi != .androideabi) {
++                module.linkSystemLibrary("pthread", .{});
++            }
+             module.linkSystemLibrary("m", .{});
+         },
+         else => {},
+@@ -731,6 +735,57 @@ fn buildTarget(
          .linkage = .dynamic,
      });
  
