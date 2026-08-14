@@ -1,8 +1,8 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index ed85ddf..1ae4e83 100644
+index ed85ddf..d550c72 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -731,6 +731,52 @@ fn buildTarget(
+@@ -731,6 +731,57 @@ fn buildTarget(
          .linkage = .dynamic,
      });
  
@@ -39,6 +39,11 @@ index ed85ddf..1ae4e83 100644
 +                // libc provisioning.
 +                const libc_path = std.fmt.allocPrint(b.allocator, "{s}/libc.so", .{dir}) catch unreachable;
 +                lib.root_module.addObjectFile(.{ .cwd_relative = libc_path });
++                // Add the NDK triple lib dir to the system library search
++                // paths so -ldl/-lpthread/-lm resolve to the bionic stubs
++                // (libdl.so/libpthread.so/libm.so) in the sysroot. The libc
++                // file's crt_dir is only used for CRT objects, not -l lookups.
++                lib.root_module.addLibraryPath(.{ .cwd_relative = dir });
 +            }
 +        }
 +
