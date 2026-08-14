@@ -48,6 +48,10 @@ apply_opentui_patch "$REPO_ROOT/patches/opentui/android-libc-link.patch"
 apply_opentui_patch "$REPO_ROOT/patches/opentui/android-translatec-include.patch"
 # Applies -Dcpu features (ZIG_CPU) to the Zig target query for armeabi-v7a.
 apply_opentui_patch "$REPO_ROOT/patches/opentui/android-cpu-features.patch"
+# Downgrades the u64 telemetry counters in audio.zig to u32 atomics: Zig
+# rejects 64-bit @atomicRmw/@atomicLoad on 32-bit ARM targets
+# (Zcu.atomicPtrAlignment caps max_atomic_bits at ptrBitWidth()=32).
+apply_opentui_patch "$REPO_ROOT/patches/opentui/android-atomics.patch"
 
 OPENTUI_ZIG_DIR="$OPENTUI_SRC/packages/core/src/zig"
 
@@ -88,7 +92,11 @@ mkdir -p "$(dirname "$LIBC_FILE")"
 # (only value-emptiness is OS-conditional). Missing keys => ParseError.
 cat > "$LIBC_FILE" <<EOF
 include_dir=$NDK_SYSROOT/usr/include
-sys_include_dir=$NDK_SYSROOT/usr/include
+# Zig's LibCDirs.detectFromInstallation adds include_dir and sys_include_dir
+# (only when they differ). NDK r28b keeps arch-specific headers like
+# asm/types.h under usr/include/<triple>, so point sys_include_dir there to
+# get both the generic and the arch-triple dir on the -isystem path.
+sys_include_dir=$NDK_SYSROOT/usr/include/${LIBC_TRIPLE}
 crt_dir=$NDK_SYSROOT/usr/lib/${LIBC_TRIPLE}/${ANDROID_API}
 msvc_lib_dir=
 kernel32_lib_dir=
