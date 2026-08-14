@@ -56,6 +56,15 @@ fi
 
 # Skip if already built (cached output from a prior run)
 LIBOPENTUI_CACHED="$OPENTUI_ZIG_DIR/../lib/${ANDROID_TRIPLE}/libopentui.so"
+CACHE_DIR="$WORK_DIR/opentui-lib"
+CACHED_LIB="$CACHE_DIR/${ANDROID_TRIPLE}/libopentui.so"
+if [ -f "$CACHED_LIB" ]; then
+    echo ">>> Restoring cached libopentui.so from $CACHED_LIB"
+    mkdir -p "$(dirname "$LIBOPENTUI_CACHED")"
+    cp "$CACHED_LIB" "$LIBOPENTUI_CACHED"
+    echo ">>> libopentui.so restored from cache — skipping"
+    exit 0
+fi
 if [ -f "$LIBOPENTUI_CACHED" ]; then
     echo ">>> libopentui.so already built at $LIBOPENTUI_CACHED — skipping"
     exit 0
@@ -115,3 +124,8 @@ else
     readelf -d "$LIBOPENTUI" 2>/dev/null | grep NEEDED || echo "       (no NEEDED entries found)"
     exit 1
 fi
+
+# Stage the built .so into the cache dir so a resumed run skips the rebuild
+mkdir -p "$CACHE_DIR/${ANDROID_TRIPLE}"
+cp "$LIBOPENTUI" "$CACHED_LIB"
+echo ">>> Staged libopentui.so into $CACHED_LIB for cache resume"

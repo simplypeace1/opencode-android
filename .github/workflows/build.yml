@@ -59,11 +59,11 @@ jobs:
           path: |
             build-${{ env.ABI_SLUG }}/deps-android/prefix
             build-${{ env.ABI_SLUG }}/webkit-android
-            build-${{ env.ABI_SLUG }}/opentui-src/packages/core/src/lib
+            build-${{ env.ABI_SLUG }}/opentui-lib
             build-${{ env.ABI_SLUG }}/dist
-          key: opencode-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
+          key: opencode-v2-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
           restore-keys: |
-            opencode-${{ env.ABI_SLUG }}-
+            opencode-v2-${{ env.ABI_SLUG }}-
 
       - name: Install system packages
         run: |
@@ -192,9 +192,9 @@ jobs:
           path: |
             build-${{ env.ABI_SLUG }}/deps-android/prefix
             build-${{ env.ABI_SLUG }}/webkit-android
-            build-${{ env.ABI_SLUG }}/opentui-src/packages/core/src/lib
+            build-${{ env.ABI_SLUG }}/opentui-lib
             build-${{ env.ABI_SLUG }}/dist
-          key: opencode-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
+          key: opencode-v2-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
 
   build-apk:
     name: Build APK (arm64-v8a + armeabi-v7a)
