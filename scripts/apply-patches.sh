@@ -46,6 +46,11 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # unguarded JIT references in the bindings
     echo ">>> Applying Bun JIT-disabled guard patch..."
     git apply "$REPO_ROOT/patches/bun/android-jit-disabled.patch"
+    # JSVALUE32_64 JIT operations return ExceptionOperationResultTag, not the
+    # JSVALUE64 aggregate-init struct; and ASCIILiteral::operator[] is
+    # ambiguous with the built-in const char* subscript on 32-bit
+    echo ">>> Applying Bun JSBuffer JSVALUE32_64 patch..."
+    git apply "$REPO_ROOT/patches/bun/android-jsbuffer32.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
