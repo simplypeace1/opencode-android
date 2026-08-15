@@ -62,7 +62,7 @@ jobs:
             build-${{ env.ABI_SLUG }}/opentui-lib
             build-${{ env.ABI_SLUG }}/bun-build
             build-${{ env.ABI_SLUG }}/dist
-          key: opencode-v3-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
+          key: opencode-v3-${{ env.ABI_SLUG }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             opencode-v3-${{ env.ABI_SLUG }}-
             opencode-v2-${{ env.ABI_SLUG }}-
@@ -191,8 +191,8 @@ jobs:
           name: opencode-android-${{ matrix.abi }}
           path: dist/jniLibs
 
-      - name: Save build cache (resume on retries)
-        if: always() && steps.cache-restore.outputs.cache-hit != 'true'
+      - name: Save build cache (rolling)
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: |
@@ -201,7 +201,7 @@ jobs:
             build-${{ env.ABI_SLUG }}/opentui-lib
             build-${{ env.ABI_SLUG }}/bun-build
             build-${{ env.ABI_SLUG }}/dist
-          key: opencode-v3-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
+          key: opencode-v3-${{ env.ABI_SLUG }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   build-apk:
     name: Build APK (arm64-v8a + armeabi-v7a)
