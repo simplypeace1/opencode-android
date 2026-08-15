@@ -51,8 +51,8 @@ fi
 # patched (which genuinely changed and must recompile), so ninja skips the
 # ~440 unchanged TUs and resumes from the previous failure point.
 echo ">>> Backdating bun sources to enable incremental ninja resume..."
-git ls-files | while IFS= read -r f; do touch -d '@0' "$f"; done
-git diff --name-only HEAD 2>/dev/null | while IFS= read -r f; do touch "$f"; done
+git ls-files -z | xargs -0 -n 200 touch -h -d '@0' 2>/dev/null || true
+git diff --name-only -z HEAD 2>/dev/null | xargs -0 -n 200 touch -h 2>/dev/null || true
 echo "    Sources backdated; patched files re-touched."
 echo "    Bun patches applied successfully"
 
