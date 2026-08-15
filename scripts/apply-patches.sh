@@ -38,7 +38,22 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # 32-bit JSC (USE(JSVALUE32_64)) has no JSValue::ValueDeleted member
     echo ">>> Applying Bun JSVALUE32_64 sentinel patch..."
     git apply "$REPO_ROOT/patches/bun/android-jsvalue32-64.patch"
+    # Highway falls back to the single EMU128 target on 32-bit ARM; the
+    # HWY_DYNAMIC_DISPATCH macro expands to a wrongly-nested namespace
+    echo ">>> Applying Bun Highway EMU128 dispatch patch..."
+    git apply "$REPO_ROOT/patches/bun/android-highway-emu128.patch"
 fi
+
+# Enable incremental ninja resume across runs. bun-src is freshly cloned every
+# run, so all source mtimes are newer than the cached .o files restored from the
+# bun-build cache, which makes ninja rebuild every translation unit from zero.
+# Backdate all tracked sources to the epoch, then re-touch only the files we
+# patched (which genuinely changed and must recompile), so ninja skips the
+# ~440 unchanged TUs and resumes from the previous failure point.
+echo ">>> Backdating bun sources to enable incremental ninja resume..."
+git ls-files | while IFS= read -r f; do touch -d '@0' "$f"; done
+git diff --name-only HEAD 2>/dev/null | while IFS= read -r f; do touch "$f"; done
+echo "    Sources backdated; patched files re-touched."
 echo "    Bun patches applied successfully"
 
 # --- Clone WebKit ---

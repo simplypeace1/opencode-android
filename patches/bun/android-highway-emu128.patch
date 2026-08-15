@@ -1,0 +1,110 @@
+diff --git a/src/bun.js/bindings/highway_strings.cpp b/src/bun.js/bindings/highway_strings.cpp
+index cc5b76a..6764858 100644
+--- a/src/bun.js/bindings/highway_strings.cpp
++++ b/src/bun.js/bindings/highway_strings.cpp
+@@ -661,11 +661,22 @@ HWY_EXPORT(ScanCharFrequencyImpl);
+ 
+ // Define the C-callable wrappers that use HWY_DYNAMIC_DISPATCH.
+ // These need to be defined *after* the HWY_EXPORT block.
++//
++// On 32-bit ARM (armeabi-v7a) Highway falls back to the single EMU128 target:
++// HWY_STATIC_TARGET == HWY_EMU128, and HWY_DYNAMIC_DISPATCH(bun::FUNC) expands
++// to N_EMU128::bun::FUNC, but the implementation namespace is bun::N_EMU128.
++// Call the impl directly in that case.
++#if HWY_STATIC_TARGET == HWY_EMU128
++#define BUN_HWY_DISPATCH(FUNC_NAME, ...) bun::N_EMU128::FUNC_NAME(__VA_ARGS__)
++#else
++#define BUN_HWY_DISPATCH(FUNC_NAME, ...) HWY_DYNAMIC_DISPATCH(bun::FUNC_NAME)(__VA_ARGS__)
++#endif
++
+ extern "C" {
+ 
+ void* highway_memmem(const uint8_t* haystack, size_t haystack_len, const uint8_t* needle, size_t needle_len)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::MemMemImpl)(haystack, haystack_len, needle, needle_len);
++    return BUN_HWY_DISPATCH(MemMemImpl, haystack, haystack_len, needle, needle_len);
+ }
+ 
+ static void highway_copy_u16_to_u8_impl(
+@@ -673,7 +684,7 @@ static void highway_copy_u16_to_u8_impl(
+     size_t count,
+     uint8_t* output)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::CopyU16ToU8Impl)(input, count, output);
++    return BUN_HWY_DISPATCH(CopyU16ToU8Impl, input, count, output);
+ }
+ 
+ void highway_copy_u16_to_u8(
+@@ -707,53 +718,53 @@ void highway_copy_u16_to_u8(
+ }
+ size_t highway_index_of_any_char(const uint8_t* HWY_RESTRICT text, size_t text_len, const uint8_t* HWY_RESTRICT chars, size_t chars_len)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::IndexOfAnyCharImpl)(text, text_len, chars, chars_len);
++    return BUN_HWY_DISPATCH(IndexOfAnyCharImpl, text, text_len, chars, chars_len);
+ }
+ 
+ void highway_char_frequency(const uint8_t* HWY_RESTRICT text, size_t text_len,
+     int32_t* freqs, int32_t delta)
+ {
+-    HWY_DYNAMIC_DISPATCH(bun::ScanCharFrequencyImpl)(text, text_len, freqs, delta);
++    BUN_HWY_DISPATCH(ScanCharFrequencyImpl, text, text_len, freqs, delta);
+ }
+ 
+ size_t highway_index_of_char(const uint8_t* HWY_RESTRICT haystack, size_t haystack_len,
+     uint8_t needle)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::IndexOfCharImpl)(haystack, haystack_len, needle);
++    return BUN_HWY_DISPATCH(IndexOfCharImpl, haystack, haystack_len, needle);
+ }
+ 
+ size_t highway_index_of_interesting_character_in_string_literal(const uint8_t* HWY_RESTRICT text, size_t text_len, uint8_t quote)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::IndexOfInterestingCharacterInStringLiteralImpl)(text, text_len, quote);
++    return BUN_HWY_DISPATCH(IndexOfInterestingCharacterInStringLiteralImpl, text, text_len, quote);
+ }
+ 
+ size_t highway_index_of_newline_or_non_ascii(const uint8_t* HWY_RESTRICT haystack, size_t haystack_len)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::IndexOfNewlineOrNonASCIIImpl)(haystack, haystack_len);
++    return BUN_HWY_DISPATCH(IndexOfNewlineOrNonASCIIImpl, haystack, haystack_len);
+ }
+ 
+ size_t highway_index_of_newline_or_non_ascii_or_hash_or_at(const uint8_t* HWY_RESTRICT haystack, size_t haystack_len)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::IndexOfNewlineOrNonASCIIOrHashOrAtImpl)(haystack, haystack_len);
++    return BUN_HWY_DISPATCH(IndexOfNewlineOrNonASCIIOrHashOrAtImpl, haystack, haystack_len);
+ }
+ 
+ bool highway_contains_newline_or_non_ascii_or_quote(const uint8_t* HWY_RESTRICT text, size_t text_len)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::ContainsNewlineOrNonASCIIOrQuoteImpl)(text, text_len);
++    return BUN_HWY_DISPATCH(ContainsNewlineOrNonASCIIOrQuoteImpl, text, text_len);
+ }
+ 
+ size_t highway_index_of_needs_escape_for_javascript_string(const uint8_t* HWY_RESTRICT text, size_t text_len, uint8_t quote_char)
+ {
+     if (quote_char == '`') {
+-        return HWY_DYNAMIC_DISPATCH(bun::IndexOfNeedsEscapeForJavaScriptStringImplBacktick)(text, text_len, quote_char);
++        return BUN_HWY_DISPATCH(IndexOfNeedsEscapeForJavaScriptStringImplBacktick, text, text_len, quote_char);
+     } else {
+-        return HWY_DYNAMIC_DISPATCH(bun::IndexOfNeedsEscapeForJavaScriptStringImplQuote)(text, text_len, quote_char);
++        return BUN_HWY_DISPATCH(IndexOfNeedsEscapeForJavaScriptStringImplQuote, text, text_len, quote_char);
+     }
+ }
+ 
+ size_t highway_index_of_space_or_newline_or_non_ascii(const uint8_t* HWY_RESTRICT text, size_t text_len)
+ {
+-    return HWY_DYNAMIC_DISPATCH(bun::IndexOfSpaceOrNewlineOrNonASCIIImpl)(text, text_len);
++    return BUN_HWY_DISPATCH(IndexOfSpaceOrNewlineOrNonASCIIImpl, text, text_len);
+ }
+ 
+ void highway_fill_with_skip_mask(
+@@ -764,7 +775,7 @@ void highway_fill_with_skip_mask(
+     size_t length, // Length of input/output
+     bool skip_mask) // Whether to skip masking
+ {
+-    HWY_DYNAMIC_DISPATCH(bun::FillWithSkipMaskImpl)(mask, mask_len, output, input, length, skip_mask);
++    BUN_HWY_DISPATCH(FillWithSkipMaskImpl, mask, mask_len, output, input, length, skip_mask);
+ }
+ 
+ } // extern "C"
