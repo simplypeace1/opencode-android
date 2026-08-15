@@ -1,0 +1,36 @@
+diff --git a/src/bun.js/bindings/ObjectBindings.cpp b/src/bun.js/bindings/ObjectBindings.cpp
+index 7795997..76d3c23 100644
+--- a/src/bun.js/bindings/ObjectBindings.cpp
++++ b/src/bun.js/bindings/ObjectBindings.cpp
+@@ -68,7 +68,13 @@ JSC::JSValue getIfPropertyExistsPrototypePollutionMitigationUnsafe(JSC::VM& vm,
+     auto isDefined = getNonIndexPropertySlotPrototypePollutionMitigation(vm, object, globalObject, name, propertySlot);
+ 
+     if (!isDefined) {
++#if USE(JSVALUE64)
+         return JSValue::decode(JSC::JSValue::ValueDeleted);
++#else
++        // 32-bit JSC (USE(JSVALUE32_64)) has no JSValue::ValueDeleted member;
++        // the "deleted" sentinel is (DeletedValueTag, 0) -> 0xfffffff800000000.
++        return JSValue::decode(static_cast<EncodedJSValue>(0xfffffff800000000ULL));
++#endif
+     }
+ 
+     scope.assertNoException();
+diff --git a/src/bun.js/bindings/bindings.cpp b/src/bun.js/bindings/bindings.cpp
+index 1830314..22c31e8 100644
+--- a/src/bun.js/bindings/bindings.cpp
++++ b/src/bun.js/bindings/bindings.cpp
+@@ -3955,7 +3955,13 @@ JSC::EncodedJSValue JSC__JSValue__getIfPropertyExistsImpl(JSC::EncodedJSValue JS
+     auto& vm = JSC::getVM(globalObject);
+     JSC::JSObject* object = value.getObject();
+     if (UNLIKELY(!object)) {
++#if USE(JSVALUE64)
+         return JSValue::encode(JSValue::decode(JSC::JSValue::ValueDeleted));
++#else
++        // 32-bit JSC (USE(JSVALUE32_64)) has no JSValue::ValueDeleted member;
++        // the "deleted" sentinel is (DeletedValueTag, 0) -> 0xfffffff800000000.
++        return static_cast<EncodedJSValue>(0xfffffff800000000ULL);
++#endif
+     }
+ 
+     // Since Identifier might not ref the string, we need to ensure it doesn't get deref'd until this function returns

@@ -10,7 +10,7 @@ on:
       abis:
         description: 'ABIs to build (comma separated)'
         required: false
-        default: 'arm64-v8a,armeabi-v7a'
+        default: 'armeabi-v7a'
   push:
     tags:
       - 'v*'
@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        abi: ["arm64-v8a", "armeabi-v7a"]
+        abi: ["armeabi-v7a"]
     outputs:
       opencode_version: ${{ env.OPENCODE_VERSION }}
     steps:

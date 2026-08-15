@@ -35,6 +35,9 @@ git apply "$REPO_ROOT/patches/bun/android-support.patch"
 if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     echo ">>> Applying Bun armeabi-v7a toolchain patch..."
     git apply "$REPO_ROOT/patches/bun/android-armv7a-toolchain.patch"
+    # 32-bit JSC (USE(JSVALUE32_64)) has no JSValue::ValueDeleted member
+    echo ">>> Applying Bun JSVALUE32_64 sentinel patch..."
+    git apply "$REPO_ROOT/patches/bun/android-jsvalue32-64.patch"
 fi
 echo "    Bun patches applied successfully"
 
