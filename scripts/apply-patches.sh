@@ -77,6 +77,13 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # nullptr as the DOMJIT signature when DFG is disabled.
     echo ">>> Applying Bun JSPerformance JSVALUE32_64 patch..."
     git apply "$REPO_ROOT/patches/bun/android-jperformance32.patch"
+    # TextEncoder__encodeInto8/16 return a u64 packing {read, written} as
+    # [2]u32 (see src/bun.js/webcore/TextEncoder.zig). The C++ extern declared
+    # them as size_t, which on 32-bit ARM is a 4-byte ABI mismatch (u64 returns
+    # in r0:r1) and made `res >> 32` a -Wshift-count-overflow. Declare the true
+    # u64 return and store into uint64_t so both words survive on 32-bit.
+    echo ">>> Applying Bun JSTextEncoder encodeInto u64 return patch..."
+    git apply "$REPO_ROOT/patches/bun/android-jstextencoder32.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
