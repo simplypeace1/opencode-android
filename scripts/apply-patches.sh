@@ -70,6 +70,13 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # Exclude it and its Zig-side extern references on 32-bit Android.
     echo ">>> Applying Bun V8 shim exclusion for 32-bit patch..."
     git apply "$REPO_ROOT/patches/bun/android-v8-shim-32.patch"
+    # EncodedJSValue is a scalar (not an aggregate) on JSVALUE32_64, so the
+    # brace-init in the JIT operation is a -Wbraced-scalar-init error; and
+    # DFG::AbstractHeapKind / DOMJIT::Effect::forWriteKinds only exist under
+    # ENABLE(DFG_JIT), which is off on 32-bit. Drop the braces and pass
+    # nullptr as the DOMJIT signature when DFG is disabled.
+    echo ">>> Applying Bun JSPerformance JSVALUE32_64 patch..."
+    git apply "$REPO_ROOT/patches/bun/android-jperformance32.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every

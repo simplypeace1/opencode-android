@@ -1,0 +1,41 @@
+diff --git a/src/bun.js/bindings/webcore/JSPerformance.cpp b/src/bun.js/bindings/webcore/JSPerformance.cpp
+index 862cbc4..bc75fcd 100644
+--- a/src/bun.js/bindings/webcore/JSPerformance.cpp
++++ b/src/bun.js/bindings/webcore/JSPerformance.cpp
+@@ -135,7 +135,7 @@ JSC_DEFINE_JIT_OPERATION(functionPerformanceNowWithoutTypeCheck, JSC::EncodedJSV
+     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+     IGNORE_WARNINGS_END
+     JSC::JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+-    return { functionPerformanceNowBody(vm) };
++    return functionPerformanceNowBody(vm);
+ }
+ 
+ JSC_DEFINE_HOST_FUNCTION(jsPerformancePrototypeFunction_markResourceTiming, (JSGlobalObject * globalObject, JSC::CallFrame* callFrame))
+@@ -266,11 +266,13 @@ size_t JSPerformance::estimatedSize(JSCell* cell, VM& vm)
+ void JSPerformance::finishCreation(VM& vm)
+ {
+     Base::finishCreation(vm);
++#if ENABLE(DFG_JIT)
+     static const JSC::DOMJIT::Signature DOMJITSignatureForPerformanceNow(
+         functionPerformanceNowWithoutTypeCheck,
+         JSPerformance::info(),
+         JSC::DOMJIT::Effect::forWriteKinds(DFG::AbstractHeapKind::SideState),
+         SpecDoubleReal);
++#endif
+ 
+     JSFunction* now = JSFunction::create(
+         vm,
+@@ -278,7 +280,12 @@ void JSPerformance::finishCreation(VM& vm)
+         0,
+         String("now"_s),
+         functionPerformanceNow, ImplementationVisibility::Public, NoIntrinsic, functionPerformanceNow,
+-        &DOMJITSignatureForPerformanceNow);
++#if ENABLE(DFG_JIT)
++        &DOMJITSignatureForPerformanceNow
++#else
++        nullptr
++#endif
++        );
+     this->putDirect(vm, JSC::Identifier::fromString(vm, "now"_s), now, 0);
+ 
+     this->putDirect(
