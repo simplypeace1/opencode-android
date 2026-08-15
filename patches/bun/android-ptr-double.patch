@@ -21,7 +21,7 @@ index f4b77c4..9c1e053 100644
  extern "C" void JSBundlerPlugin__addError(void*, void*, JSC::EncodedJSValue, JSC::EncodedJSValue);
  extern "C" void JSBundlerPlugin__onLoadAsync(void*, void*, JSC::EncodedJSValue, JSC::EncodedJSValue);
 diff --git a/src/bun.js/bindings/JSFFIFunction.cpp b/src/bun.js/bindings/JSFFIFunction.cpp
-index a8e7353..162cd55 100644
+index a8e7353..f4a22f2 100644
 --- a/src/bun.js/bindings/JSFFIFunction.cpp
 +++ b/src/bun.js/bindings/JSFFIFunction.cpp
 @@ -122,7 +122,13 @@ extern "C" JSC::EncodedJSValue Bun__CreateFFIFunctionValue(Zig::GlobalObject* gl
@@ -33,7 +33,7 @@ index a8e7353..162cd55 100644
 +#if USE(JSVALUE64)
          function->putDirect(vm, JSC::Identifier::fromString(vm, String("ptr"_s)), JSC::jsNumber(std::bit_cast<double>(functionPointer)), JSC::PropertyAttribute::ReadOnly | 0);
 +#else
-+        function->putDirect(vm, JSC::Identifier::fromString(vm, String("ptr"_s)), JSC::jsNumber(static_cast<double>(functionPointer)), JSC::PropertyAttribute::ReadOnly | 0);
++        function->putDirect(vm, JSC::Identifier::fromString(vm, String("ptr"_s)), JSC::jsNumber(static_cast<double>(reinterpret_cast<uintptr_t>(functionPointer))), JSC::PropertyAttribute::ReadOnly | 0);
 +#endif
          function->symbolFromDynamicLibrary = symbolFromDynamicLibrary;
          return JSC::JSValue::encode(function);
