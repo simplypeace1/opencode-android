@@ -60,6 +60,10 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # NAPI bigint functions must convert between 32-bit digits and 64-bit words
     echo ">>> Applying Bun NAPI bigint 32-bit word-conversion patch..."
     git apply "$REPO_ROOT/patches/bun/android-napi-bigint32.patch"
+    # On 32-bit size_t==uint32_t and ssize_t==int32_t, so the explicit
+    # template instantiations collide; keep size_t/ssize_t for 64-bit only
+    echo ">>> Applying Bun NodeValidator validateInteger 32-bit patch..."
+    git apply "$REPO_ROOT/patches/bun/android-nodevalidator-32.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
