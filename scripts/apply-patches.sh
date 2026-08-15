@@ -51,6 +51,11 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # ambiguous with the built-in const char* subscript on 32-bit
     echo ">>> Applying Bun JSBuffer JSVALUE32_64 patch..."
     git apply "$REPO_ROOT/patches/bun/android-jsbuffer32.patch"
+    # std::bit_cast<double>/<uintptr_t> requires equal sizes (8 != 4 on 32-bit);
+    # a 32-bit pointer fits exactly in a double's mantissa so a plain numeric
+    # conversion round-trips losslessly
+    echo ">>> Applying Bun pointer-in-double JSVALUE32_64 patch..."
+    git apply "$REPO_ROOT/patches/bun/android-ptr-double.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every

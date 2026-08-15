@@ -1,0 +1,72 @@
+diff --git a/src/bun.js/bindings/JSBundlerPlugin.cpp b/src/bun.js/bindings/JSBundlerPlugin.cpp
+index f4b77c4..9c1e053 100644
+--- a/src/bun.js/bindings/JSBundlerPlugin.cpp
++++ b/src/bun.js/bindings/JSBundlerPlugin.cpp
+@@ -41,9 +41,16 @@ namespace Bun {
+ extern "C" void CrashHandler__setInsideNativePlugin(const char* plugin_name);
+ extern "C" int OnBeforeParsePlugin__isDone(void* context);
+ extern "C" void OnBeforeParseResult__reset(OnBeforeParseResult* result);
++// Pack a void* into a JS number. On 64-bit the pointer bits are preserved
++// verbatim via std::bit_cast; on 32-bit a pointer fits exactly in a double's
++// 52-bit mantissa, so a plain numeric conversion round-trips losslessly.
++#if USE(JSVALUE64)
+ #define WRAP_BUNDLER_PLUGIN(argName) jsDoubleNumber(std::bit_cast<double>(reinterpret_cast<uintptr_t>(argName)))
+ #define UNWRAP_BUNDLER_PLUGIN(callFrame) reinterpret_cast<void*>(std::bit_cast<uintptr_t>(callFrame->argument(0).asDouble()))
+-
++#else
++#define WRAP_BUNDLER_PLUGIN(argName) jsDoubleNumber(static_cast<double>(reinterpret_cast<uintptr_t>(argName)))
++#define UNWRAP_BUNDLER_PLUGIN(callFrame) reinterpret_cast<void*>(static_cast<uintptr_t>(callFrame->argument(0).asDouble()))
++#endif
+ /// These are callbacks defined in Zig and to be run after their associated JS version is run
+ extern "C" void JSBundlerPlugin__addError(void*, void*, JSC::EncodedJSValue, JSC::EncodedJSValue);
+ extern "C" void JSBundlerPlugin__onLoadAsync(void*, void*, JSC::EncodedJSValue, JSC::EncodedJSValue);
+diff --git a/src/bun.js/bindings/JSFFIFunction.cpp b/src/bun.js/bindings/JSFFIFunction.cpp
+index a8e7353..162cd55 100644
+--- a/src/bun.js/bindings/JSFFIFunction.cpp
++++ b/src/bun.js/bindings/JSFFIFunction.cpp
+@@ -122,7 +122,13 @@ extern "C" JSC::EncodedJSValue Bun__CreateFFIFunctionValue(Zig::GlobalObject* gl
+         // We should only expose the "ptr" field when it's a JSCallback for bun:ffi.
+         // Not for internal usages of this function type.
+         // We should also consider a separate JSFunction type for our usage to not have this branch in the first place...
++        // Pack the function pointer as a JS number. On 32-bit a pointer fits
++        // exactly in a double's mantissa so the numeric conversion is lossless.
++#if USE(JSVALUE64)
+         function->putDirect(vm, JSC::Identifier::fromString(vm, String("ptr"_s)), JSC::jsNumber(std::bit_cast<double>(functionPointer)), JSC::PropertyAttribute::ReadOnly | 0);
++#else
++        function->putDirect(vm, JSC::Identifier::fromString(vm, String("ptr"_s)), JSC::jsNumber(static_cast<double>(functionPointer)), JSC::PropertyAttribute::ReadOnly | 0);
++#endif
+         function->symbolFromDynamicLibrary = symbolFromDynamicLibrary;
+         return JSC::JSValue::encode(function);
+     }
+diff --git a/src/bun.js/bindings/ZigGlobalObject.cpp b/src/bun.js/bindings/ZigGlobalObject.cpp
+index e60230d..41e15b5 100644
+--- a/src/bun.js/bindings/ZigGlobalObject.cpp
++++ b/src/bun.js/bindings/ZigGlobalObject.cpp
+@@ -1553,8 +1553,14 @@ JSC_DEFINE_HOST_FUNCTION(functionNativeMicrotaskTrampoline,
+     double cellPtr = callFrame->uncheckedArgument(0).asNumber();
+     double callbackPtr = callFrame->uncheckedArgument(1).asNumber();
+ 
+-    void* cell = reinterpret_cast<void*>(__bit_cast<uintptr_t>(cellPtr));
++    void* cell = reinterpret_cast<void*>(
++#if USE(JSVALUE64)
++        __bit_cast<uintptr_t>(cellPtr));
+     auto* callback = reinterpret_cast<MicrotaskCallback>(__bit_cast<uintptr_t>(callbackPtr));
++#else
++        static_cast<uintptr_t>(cellPtr));
++    auto* callback = reinterpret_cast<MicrotaskCallback>(static_cast<uintptr_t>(callbackPtr));
++#endif
+     callback(cell);
+     return JSValue::encode(jsUndefined());
+ }
+@@ -3994,7 +4000,11 @@ extern "C" void JSC__JSGlobalObject__queueMicrotaskCallback(Zig::GlobalObject* g
+     JSFunction* function = globalObject->nativeMicrotaskTrampoline();
+ 
+     // Do not use JSCell* here because the GC will try to visit it.
++#if USE(JSVALUE64)
+     globalObject->queueMicrotask(function, JSValue(__bit_cast<double>(reinterpret_cast<uintptr_t>(ptr))), JSValue(__bit_cast<double>(reinterpret_cast<uintptr_t>(callback))), jsUndefined(), jsUndefined());
++#else
++    globalObject->queueMicrotask(function, JSValue(static_cast<double>(reinterpret_cast<uintptr_t>(ptr))), JSValue(static_cast<double>(reinterpret_cast<uintptr_t>(callback))), jsUndefined(), jsUndefined());
++#endif
+ }
+ 
+ JSC::Identifier GlobalObject::moduleLoaderResolve(JSGlobalObject* jsGlobalObject,
