@@ -3,12 +3,15 @@ new file mode 100644
 index 0000000..0000000
 --- /dev/null
 +++ b/cmake/toolchains/android-armv7a.cmake
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,72 @@
 +# Android armeabi-v7a (32-bit ARM) cross-compilation toolchain for Bun
 +# Uses Android NDK clang toolchain targeting Bionic libc
 +
 +set(CMAKE_SYSTEM_NAME Android)
-+set(CMAKE_SYSTEM_PROCESSOR "armv7a")
++# CMake 3.31's Android-Determine.cmake requires CMAKE_SYSTEM_PROCESSOR to
++# exactly match NDK_ABI_<abi>_PROC for the selected ABI: for armeabi-v7a
++# that is "armv7-a" (with the hyphen), not "armv7a".
++set(CMAKE_SYSTEM_PROCESSOR "armv7-a")
 +set(ABI android)
 +
 +# Android API level (24 = Android 7.0 Nougat — minimum for 32-bit Android)

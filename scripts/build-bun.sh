@@ -79,6 +79,7 @@ cd "$BUN_BUILD"
 
 cmake \
     -G Ninja \
+    -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" \
     -DCMAKE_TOOLCHAIN_FILE="$BUN_TOOLCHAIN" \
     -DANDROID_NDK_HOME="$ANDROID_NDK_HOME" \
     -DCMAKE_BUILD_TYPE=Release \

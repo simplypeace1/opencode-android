@@ -60,9 +60,11 @@ jobs:
             build-${{ env.ABI_SLUG }}/deps-android/prefix
             build-${{ env.ABI_SLUG }}/webkit-android
             build-${{ env.ABI_SLUG }}/opentui-lib
+            build-${{ env.ABI_SLUG }}/bun-build
             build-${{ env.ABI_SLUG }}/dist
-          key: opencode-v2-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
+          key: opencode-v3-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
           restore-keys: |
+            opencode-v3-${{ env.ABI_SLUG }}-
             opencode-v2-${{ env.ABI_SLUG }}-
 
       - name: Install system packages
@@ -113,7 +115,11 @@ jobs:
 
       - name: Install host Bun
         run: |
-          curl -fsSL https://bun.sh/install | bash
+          # Pin to the same version as the Android bun (BUN_VERSION): bun.sh/install
+          # otherwise pulls the latest 1.3.x, whose standalone format embeds the
+          # module graph in an ELF .bun section (no EOF trailer), breaking
+          # build-opencode-android.ts's append-at-EOF module graph extraction.
+          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
           export PATH="$HOME/.bun/bin:$PATH"
           echo "$HOME/.bun/bin" >> $GITHUB_PATH
           bun --version
@@ -193,8 +199,9 @@ jobs:
             build-${{ env.ABI_SLUG }}/deps-android/prefix
             build-${{ env.ABI_SLUG }}/webkit-android
             build-${{ env.ABI_SLUG }}/opentui-lib
+            build-${{ env.ABI_SLUG }}/bun-build
             build-${{ env.ABI_SLUG }}/dist
-          key: opencode-v2-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
+          key: opencode-v3-${{ env.ABI_SLUG }}-${{ env.WEBKIT_COMMIT }}-${{ env.ICU_VERSION }}-${{ env.BUN_VERSION }}
 
   build-apk:
     name: Build APK (arm64-v8a + armeabi-v7a)
