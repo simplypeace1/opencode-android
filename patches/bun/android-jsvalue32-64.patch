@@ -34,3 +34,41 @@ index 1830314..22c31e8 100644
      }
  
      // Since Identifier might not ref the string, we need to ensure it doesn't get deref'd until this function returns
+
+diff --git a/src/bun.js/bindings/BunProcess.cpp b/src/bun.js/bindings/BunProcess.cpp
+index 4752d5c..1ea8552 100644
+--- a/src/bun.js/bindings/BunProcess.cpp
++++ b/src/bun.js/bindings/BunProcess.cpp
+@@ -161,6 +161,8 @@ static JSValue constructArch(VM& vm, JSObject* processObject)
+     return JSC::jsString(vm, makeAtomString("x64"_s));
+ #elif CPU(ARM64)
+     return JSC::jsString(vm, makeAtomString("arm64"_s));
++#elif CPU(ARM)
++    return JSC::jsString(vm, makeAtomString("arm"_s));
+ #else
+ #error "Unknown architecture"
+ #endif
+@@ -379,6 +381,13 @@ JSC_DEFINE_HOST_FUNCTION(Process_functionDlopen, (JSC::JSGlobalObject * globalOb
+         return ERR::DLOPEN_DISABLED(scope, globalObject, "Cannot load native addon because loading addons is disabled."_s);
+     }
+ 
++#if !USE(JSVALUE64)
++    // N-API native addons are not supported on 32-bit ARM (USE(JSVALUE32_64)):
++    // napi_value is a pointer (4 bytes) but EncodedJSValue is int64 (8 bytes),
++    // so an addon's handle cannot carry a JS value across the FFI boundary.
++    return ERR::DLOPEN_DISABLED(scope, globalObject, "Native addons are not supported on 32-bit ARM (JSVALUE32_64)."_s);
++#endif
++
+     auto argCount = callFrame->argumentCount();
+     if (argCount < 2) {
+         JSC::throwTypeError(globalObject, scope, "dlopen requires 2 arguments"_s);
+@@ -622,7 +631,9 @@ JSC_DEFINE_HOST_FUNCTION(Process_functionDlopen, (JSC::JSGlobalObject * globalOb
+         .reserved = {},
+     };
+ 
++#if USE(JSVALUE64)
+     static_assert(sizeof(napi_value) == sizeof(EncodedJSValue), "EncodedJSValue must be reinterpretable as a pointer");
++#endif
+ 
+     auto env = globalObject->makeNapiEnv(nmodule);
+     env->filename = filename_cstr;
