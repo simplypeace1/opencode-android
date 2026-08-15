@@ -1,5 +1,5 @@
 diff --git a/src/bun.js/bindings/napi.cpp b/src/bun.js/bindings/napi.cpp
-index da229db..f5c04b2 100644
+index da229db..7bcc60e 100644
 --- a/src/bun.js/bindings/napi.cpp
 +++ b/src/bun.js/bindings/napi.cpp
 @@ -2427,11 +2427,74 @@ extern "C" napi_status napi_typeof(napi_env env, napi_value val,
@@ -148,7 +148,7 @@ index da229db..f5c04b2 100644
  
      // throws RangeError if size is larger than JSC's limit
 -    auto* bigint = JSBigInt::createWithLength(globalObject, word_count);
-+    size_t digitCount = bigIntWordCountToDigits(word_count);
++    size_t digitCount = bigIntWordCountToDigits(word_count, words);
 +    if (digitCount > UINT_MAX) {
 +        JSC::throwOutOfMemoryError(globalObject, scope);
 +        RETURN_IF_EXCEPTION(scope, napi_set_last_error(env, napi_pending_exception));
