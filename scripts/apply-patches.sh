@@ -56,6 +56,10 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # conversion round-trips losslessly
     echo ">>> Applying Bun pointer-in-double JSVALUE32_64 patch..."
     git apply "$REPO_ROOT/patches/bun/android-ptr-double.patch"
+    # JSBigInt::Digit is uint32_t on 32-bit (JSVALUE32_64), not uint64_t, so
+    # NAPI bigint functions must convert between 32-bit digits and 64-bit words
+    echo ">>> Applying Bun NAPI bigint 32-bit word-conversion patch..."
+    git apply "$REPO_ROOT/patches/bun/android-napi-bigint32.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
