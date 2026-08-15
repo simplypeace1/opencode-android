@@ -64,6 +64,12 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # template instantiations collide; keep size_t/ssize_t for 64-bit only
     echo ">>> Applying Bun NodeValidator validateInteger 32-bit patch..."
     git apply "$REPO_ROOT/patches/bun/android-nodevalidator-32.patch"
+    # The V8 compatibility shim emulates V8's 64-bit tagged-pointer ABI
+    # (Smi in the upper 32 bits, fixed Map/HandleScope sizes matching
+    # real_v8::internal::Internals); it only compiles under USE(JSVALUE64).
+    # Exclude it and its Zig-side extern references on 32-bit Android.
+    echo ">>> Applying Bun V8 shim exclusion for 32-bit patch..."
+    git apply "$REPO_ROOT/patches/bun/android-v8-shim-32.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
