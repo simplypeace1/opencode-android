@@ -42,6 +42,10 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # HWY_DYNAMIC_DISPATCH macro expands to a wrongly-nested namespace
     echo ">>> Applying Bun Highway EMU128 dispatch patch..."
     git apply "$REPO_ROOT/patches/bun/android-highway-emu128.patch"
+    # JSC on 32-bit ARM is interpreter-only (ENABLE(JIT)=0); guard the two
+    # unguarded JIT references in the bindings
+    echo ">>> Applying Bun JIT-disabled guard patch..."
+    git apply "$REPO_ROOT/patches/bun/android-jit-disabled.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
