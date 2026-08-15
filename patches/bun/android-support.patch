@@ -272,7 +272,7 @@ index c960084..aa591ff 100644
  register_command(
    TARGET
      bun-zig
-@@ -606,6 +614,23 @@ if(WIN32)
+@@ -606,6 +614,25 @@ if(WIN32)
    list(APPEND BUN_CXX_SOURCES ${CWD}/src/bun.js/bindings/windows/rescle-binding.cpp)
  endif()
  
@@ -280,7 +280,9 @@ index c960084..aa591ff 100644
 +# This creates a .tbss section with 64-byte alignment, forcing lld to emit
 +# PT_TLS p_align=64, which is required by Android 12+ Bionic on ARM64.
 +# We assemble it as a separate target to avoid C/C++ flags being applied.
-+if(ANDROID)
++# NOTE: This is ARM64-only (32-bit ARM gas treats '@' as a comment char and
++# Bionic does not enforce the 64-byte TLS p_align constraint there).
++if(ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
 +  enable_language(ASM)
 +  set(ANDROID_TLS_ALIGN_SRC ${CWD}/src/android_tls_align.s)
 +  set(ANDROID_TLS_ALIGN_OBJ ${BUILD_PATH}/android_tls_align.o)
@@ -300,9 +302,9 @@ index c960084..aa591ff 100644
    add_custom_target(bun DEPENDS ${bun})
  endif()
  
-+# Android: Link the TLS alignment fix object file.
++# Android: Link the TLS alignment fix object file (ARM64 only).
 +# --undefined prevents --gc-sections from discarding the unreferenced TLS symbol.
-+if(ANDROID)
++if(ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
 +  add_dependencies(${bun} android-tls-align)
 +  target_link_libraries(${bun} PRIVATE ${ANDROID_TLS_ALIGN_OBJ})
 +  target_link_options(${bun} PRIVATE "LINKER:--undefined=_android_tls_align_force")
