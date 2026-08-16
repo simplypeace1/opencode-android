@@ -84,6 +84,15 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # u64 return and store into uint64_t so both words survive on 32-bit.
     echo ">>> Applying Bun JSTextEncoder encodeInto u64 return patch..."
     git apply "$REPO_ROOT/patches/bun/android-jstextencoder32.patch"
+    # SerializedScriptValue.cpp: two latent 32-bit-only code paths. (1) The
+    # #if !ASSUME_LITTLE_ENDIAN branch of readIdentifier() assigned a String
+    # to an Identifier& (no such operator=); ASSUME_LITTLE_ENDIAN is 0 on
+    # armv7 because CPU(NEEDS_ALIGNED_ACCESS) is set, so this branch only
+    # compiles on 32-bit. Build a String first, then intern it via
+    # Identifier::fromString(vm, string). (2) ArrayBuffer::tryCreate span
+    # brace-init narrowed uint64_t length to size_t (32-bit) — explicit cast.
+    echo ">>> Applying Bun SerializedScriptValue 32-bit patch..."
+    git apply "$REPO_ROOT/patches/bun/android-ssv32.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every

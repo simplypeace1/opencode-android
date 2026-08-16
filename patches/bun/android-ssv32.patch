@@ -1,0 +1,28 @@
+diff --git a/src/bun.js/bindings/webcore/SerializedScriptValue.cpp b/src/bun.js/bindings/webcore/SerializedScriptValue.cpp
+index 36f0905..999c013 100644
+--- a/src/bun.js/bindings/webcore/SerializedScriptValue.cpp
++++ b/src/bun.js/bindings/webcore/SerializedScriptValue.cpp
+@@ -3378,12 +3378,13 @@ private:
+         ptr += length * sizeof(UChar);
+ #else
+         std::span<UChar> characters;
+-        str = String::createUninitialized(length, characters);
++        String string = String::createUninitialized(length, characters);
+         for (unsigned i = 0; i < length; ++i) {
+             uint16_t c;
+             readLittleEndian(ptr, end, c);
+             characters[i] = c;
+         }
++        str = Identifier::fromString(vm, string);
+ #endif
+         return true;
+     }
+@@ -3526,7 +3527,7 @@ private:
+             return false;
+         if (m_ptr + length > m_end)
+             return false;
+-        arrayBuffer = ArrayBuffer::tryCreate({ m_ptr, length });
++        arrayBuffer = ArrayBuffer::tryCreate({ m_ptr, static_cast<size_t>(length) });
+         if (!arrayBuffer)
+             return false;
+         m_ptr += length;
