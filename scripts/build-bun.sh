@@ -11,9 +11,11 @@
 # target compiles. We accomplish this by running `ninja clone-zig` first to
 # trigger the download, then applying the patch, then running the full build.
 #
-# The Zig cache must also be cleared between runs to avoid stale cache entries
-# referencing files from deleted source trees (which causes FileNotFound errors
-# in translate-c output lookup).
+# The Zig cache is keyed by content hashes, and bun-src is a fresh clone at the
+# SAME absolute path every run, so cached translate-c/Zig artifacts from a prior
+# run (restored from the bun-build cache) stay valid. We only wipe the cache
+# when it is missing, so repeated runs resume translate-c and the Zig
+# compile at the latest possible point instead of re-translating every header.
 
 set -euo pipefail
 
@@ -53,7 +55,12 @@ fi
 # Fix: Symlink .zig-cache -> the explicit cache dir so both paths resolve to
 # the same physical location. Clear both first to avoid stale entries.
 echo ">>> Setting up Zig cache directories..."
-rm -rf "$BUN_BUILD/cache/zig" "$BUN_SRC/.zig-cache"
+if [ -d "$BUN_BUILD/cache/zig/local" ]; then
+    echo "    Resuming cached Zig artifacts from a prior run"
+else
+    echo "    No cached Zig artifacts — starting fresh"
+    rm -rf "$BUN_BUILD/cache/zig" "$BUN_SRC/.zig-cache"
+fi
 mkdir -p "$BUN_BUILD/cache/zig/local"
 mkdir -p "$BUN_BUILD/cache/zig/global"
 ln -sfn "$BUN_BUILD/cache/zig/local" "$BUN_SRC/.zig-cache"
