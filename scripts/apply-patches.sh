@@ -93,6 +93,13 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # brace-init narrowed uint64_t length to size_t (32-bit) — explicit cast.
     echo ">>> Applying Bun SerializedScriptValue 32-bit patch..."
     git apply "$REPO_ROOT/patches/bun/android-ssv32.patch"
+    # android-support.patch's build.zig sysroot plumbing hardcodes the
+    # aarch64-linux-android header dir, which doesn't exist on armv7 (bionic
+    # keeps ifaddrs.h in the per-arch dir arm-linux-androideabi), so translate-c
+    # failed with "ifaddrs.h not found". Derive the arch dir from the target
+    # triple (aarch64-linux-android on arm64, arm-linux-androideabi on armv7).
+    echo ">>> Applying Bun Zig NDK sysroot triple-based include patch..."
+    git apply "$REPO_ROOT/patches/bun/android-zig-ndk-sysroot.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every

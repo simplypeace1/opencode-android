@@ -1,0 +1,22 @@
+diff --git a/build.zig b/build.zig
+index 07a91d1..556c038 100644
+--- a/build.zig
++++ b/build.zig
+@@ -504,12 +504,14 @@ fn getTranslateC(b: *Build, initial_target: std.Build.ResolvedTarget, optimize:
+         .link_libc = true,
+     });
+ 
+-    // Android/Bionic: Zig has no bundled libc headers for aarch64-linux-android,
+-    // so translate-c can't find system headers. Add NDK sysroot include paths.
++    // Android/Bionic: Zig has no bundled libc headers for arm-linux-androideabi
++    // (or aarch64-linux-android), so translate-c can't find system headers.
++    // Add NDK sysroot include paths, using the target triple for the arch dir.
+     if (target.result.abi == .android) {
+         if (android_ndk_sysroot) |sysroot| {
++            const triple = target.result.zigTriple(b.allocator) catch @panic("OOM");
+             translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include", .{sysroot}) });
+-            translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include/aarch64-linux-android", .{sysroot}) });
++            translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include/{s}", .{ sysroot, triple }) });
+         }
+     }
+
