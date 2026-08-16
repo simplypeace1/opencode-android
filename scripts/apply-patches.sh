@@ -97,7 +97,8 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # aarch64-linux-android header dir, which doesn't exist on armv7 (bionic
     # keeps ifaddrs.h in the per-arch dir arm-linux-androideabi), so translate-c
     # failed with "ifaddrs.h not found". Derive the arch dir from the target
-    # triple (aarch64-linux-android on arm64, arm-linux-androideabi on armv7).
+    # triple (aarch64-linux-android on arm64, arm-linux-androideabi on armv7)
+    # and match BOTH Android ABIs: 32-bit ARM renders .androideabi, 64-bit .android.
     echo ">>> Applying Bun Zig NDK sysroot triple-based include patch..."
     git apply "$REPO_ROOT/patches/bun/android-zig-ndk-sysroot.patch"
 fi

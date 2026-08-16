@@ -1,22 +1,31 @@
 diff --git a/build.zig b/build.zig
-index 07a91d1..556c038 100644
+index 07a91d1..3a6aaf8 100644
 --- a/build.zig
 +++ b/build.zig
-@@ -504,12 +504,14 @@ fn getTranslateC(b: *Build, initial_target: std.Build.ResolvedTarget, optimize:
+@@ -504,13 +504,19 @@ fn getTranslateC(b: *Build, initial_target: std.Build.ResolvedTarget, optimize:
          .link_libc = true,
      });
  
 -    // Android/Bionic: Zig has no bundled libc headers for aarch64-linux-android,
 -    // so translate-c can't find system headers. Add NDK sysroot include paths.
+-    if (target.result.abi == .android) {
+-        if (android_ndk_sysroot) |sysroot| {
+-            translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include", .{sysroot}) });
+-            translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include/aarch64-linux-android", .{sysroot}) });
+-        }
 +    // Android/Bionic: Zig has no bundled libc headers for arm-linux-androideabi
 +    // (or aarch64-linux-android), so translate-c can't find system headers.
 +    // Add NDK sysroot include paths, using the target triple for the arch dir.
-     if (target.result.abi == .android) {
-         if (android_ndk_sysroot) |sysroot| {
-+            const triple = target.result.zigTriple(b.allocator) catch @panic("OOM");
-             translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include", .{sysroot}) });
--            translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include/aarch64-linux-android", .{sysroot}) });
-+            translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include/{s}", .{ sysroot, triple }) });
-         }
++    // Note: 32-bit ARM renders the .androideabi ABI, 64-bit renders .android.
++    switch (target.result.abi) {
++        .android, .androideabi => {
++            if (android_ndk_sysroot) |sysroot| {
++                const triple = target.result.zigTriple(b.allocator) catch @panic("OOM");
++                translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include", .{sysroot}) });
++                translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include/{s}", .{ sysroot, triple }) });
++            }
++        },
++        else => {},
      }
-
+ 
+     inline for ([_](struct { []const u8, bool }){
