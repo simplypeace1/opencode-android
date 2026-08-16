@@ -99,6 +99,32 @@ cmake \
 echo ""
 echo ">>> Configure complete."
 
+# 32-bit: mimalloc's segment-map computes MI_SEGMENT_MAP_PART_SPAN in
+# 32-bit size_t arithmetic, where 31744 * 16MiB wraps to exactly zero —
+# a division by zero and a variable-length array at file scope. The deps
+# are fetched into $BUN_SRC/vendor during CMake configure, so patch the
+# vendored copy here (before ninja compiles it).
+MIMALLOC_SEGMAP="$BUN_SRC/vendor/mimalloc/src/segment-map.c"
+if [ "${ANDROID_ABI}" = "armeabi-v7a" ] && [ -f "$MIMALLOC_SEGMAP" ]; then
+    echo ">>> Applying mimalloc 32-bit segment-map patch..."
+    cd "$BUN_SRC/vendor/mimalloc"
+    if patch --dry-run -p1 < "$REPO_ROOT/patches/bun/android-arm32-mimalloc-segmap.patch" >/dev/null 2>&1; then
+        patch -p1 < "$REPO_ROOT/patches/bun/android-arm32-mimalloc-segmap.patch"
+        echo "    mimalloc segment-map patch applied successfully."
+    else
+        # Check if already applied by looking for the 32-bit fallback
+        if grep -q "MI_SEGMENT_MAP_MAX_PARTS      (1)" "$MIMALLOC_SEGMAP" 2>/dev/null; then
+            echo "    mimalloc segment-map patch already applied."
+        else
+            echo "WARNING: mimalloc patch doesn't match cleanly. Trying with --fuzz..."
+            patch -p1 --fuzz=3 < "$REPO_ROOT/patches/bun/android-arm32-mimalloc-segmap.patch" || {
+                echo "ERROR: Could not apply mimalloc segment-map patch. Manual intervention required."
+                exit 1
+            }
+        fi
+    fi
+fi
+
 # Download Zig vendor BEFORE the full build.
 # The clone-zig target downloads Bun's custom Zig fork to $BUN_SRC/vendor/zig/.
 # We need Zig downloaded first so we can patch posix.zig before compilation starts.

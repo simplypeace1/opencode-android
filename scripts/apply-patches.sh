@@ -116,6 +116,13 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # the unconditional ZigString flags field, 16 bytes on 32-bit)
     echo ">>> Applying Bun 32-bit arch/assert fixes patch..."
     git apply "$REPO_ROOT/patches/bun/android-arm32-zig-arch.patch"
+    # 32-bit integer-width normalization: Blob.SizeType(u52) arithmetic and
+    # slices use @intCast (usize is u32 on arm32), fmt.fastDigitCount returns
+    # usize, SmolStr keeps a fixed 128-bit layout with a u64 pointer field on
+    # 32-bit, npm gains .arm32 arch mapping, and the remaining u64/usize/u52
+    # cast and byteLen sites across the codebase
+    echo ">>> Applying Bun 32-bit u52/usize/size-format fixes patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-zig-u52-fmt.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every

@@ -1,0 +1,22 @@
+diff --git a/src/segment-map.c b/src/segment-map.c
+index 2c3964f..7d9df02 100644
+--- a/src/segment-map.c
++++ b/src/segment-map.c
+@@ -29,8 +29,17 @@ terms of the MIT license. A copy of the license can be found in the file
+ #define MI_SEGMENT_MAP_PART_BITS      (8*MI_SEGMENT_MAP_PART_SIZE)
+ #define MI_SEGMENT_MAP_PART_ENTRIES   (MI_SEGMENT_MAP_PART_SIZE / MI_INTPTR_SIZE)
+ #define MI_SEGMENT_MAP_PART_BIT_SPAN  (MI_SEGMENT_ALIGN)
++#if (MI_INTPTR_SIZE > 4)
+ #define MI_SEGMENT_MAP_PART_SPAN      (MI_SEGMENT_MAP_PART_BITS * MI_SEGMENT_MAP_PART_BIT_SPAN)
+ #define MI_SEGMENT_MAP_MAX_PARTS      ((MI_SEGMENT_MAP_MAX_ADDRESS / MI_SEGMENT_MAP_PART_SPAN) + 1)
++#else
++// 32-bit: MI_SEGMENT_MAP_PART_SPAN wraps to exactly zero in 32-bit size_t
++// arithmetic (31744 * 16MiB == 0 mod 2^32), making the formula above a
++// division by zero and the array below a variable-length array at file
++// scope. A single part spanning the whole 4 GiB address space is enough.
++#define MI_SEGMENT_MAP_PART_SPAN      (UINT32_MAX)
++#define MI_SEGMENT_MAP_MAX_PARTS      (1)
++#endif
+ 
+ // A part of the segment map.
+ typedef struct mi_segmap_part_s {
