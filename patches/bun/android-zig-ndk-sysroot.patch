@@ -1,8 +1,8 @@
 diff --git a/build.zig b/build.zig
-index 07a91d1..3a6aaf8 100644
+index 07a91d1..eb55868 100644
 --- a/build.zig
 +++ b/build.zig
-@@ -504,13 +504,19 @@ fn getTranslateC(b: *Build, initial_target: std.Build.ResolvedTarget, optimize:
+@@ -504,13 +504,21 @@ fn getTranslateC(b: *Build, initial_target: std.Build.ResolvedTarget, optimize:
          .link_libc = true,
      });
  
@@ -15,12 +15,14 @@ index 07a91d1..3a6aaf8 100644
 -        }
 +    // Android/Bionic: Zig has no bundled libc headers for arm-linux-androideabi
 +    // (or aarch64-linux-android), so translate-c can't find system headers.
-+    // Add NDK sysroot include paths, using the target triple for the arch dir.
-+    // Note: 32-bit ARM renders the .androideabi ABI, 64-bit renders .android.
++    // Add NDK sysroot include paths, using the target's linux triple for the
++    // arch dir. Note: zigTriple() would append the API level (e.g.
++    // "arm-linux-androideabi.14"), but the NDK dir has no suffix, and 32-bit
++    // ARM renders the .androideabi ABI while 64-bit renders .android.
 +    switch (target.result.abi) {
 +        .android, .androideabi => {
 +            if (android_ndk_sysroot) |sysroot| {
-+                const triple = target.result.zigTriple(b.allocator) catch @panic("OOM");
++                const triple = target.result.linuxTriple(b.allocator) catch @panic("OOM");
 +                translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include", .{sysroot}) });
 +                translate_c.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/usr/include/{s}", .{ sysroot, triple }) });
 +            }
