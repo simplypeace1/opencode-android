@@ -550,19 +550,23 @@ index 36a3443..21594eb 100644
  
 
 diff --git a/src/string/PathString.zig b/src/string/PathString.zig
-index 650ffb3..964b811 100644
 --- a/src/string/PathString.zig
 +++ b/src/string/PathString.zig
-@@ -1,7 +1,7 @@
- const std = @import("std");
- const bun = @import("bun");
+@@ -3,7 +3,12 @@
  const PathIntLen = std.math.IntFittingRange(0, bun.MAX_PATH_BYTES);
--const use_small_path_string_ = @bitSizeOf(usize) - @bitSizeOf(PathIntLen) >= 53;
-+const use_small_path_string_ = @bitSizeOf(usize) == 32 or @bitSizeOf(usize) - @bitSizeOf(PathIntLen) >= 53;
+ const use_small_path_string_ = @bitSizeOf(usize) - @bitSizeOf(PathIntLen) >= 53;
  
- const PathStringBackingIntType = if (use_small_path_string_) u64 else u128;
+-const PathStringBackingIntType = if (use_small_path_string_) u64 else u128;
++const PathStringBackingIntType = if (use_small_path_string_)
++    u64
++else if (@bitSizeOf(usize) == 64)
++    u128
++else
++    u64;
  
-@@ -37,7 +37,10 @@ pub const PathString = packed struct(PathStringBackingIntType) {
+ // macOS sets file path limit to 1024
+ // Since a pointer on x64 is 64 bits and only 46 bits are used
+@@ -37,7 +42,10 @@
          @setRuntimeSafety(false); // "cast causes pointer to be null" is fine here. if it is null, the len will be 0.
  
          return .{
@@ -574,9 +578,7 @@ index 650ffb3..964b811 100644
              .len = @as(PathInt, @truncate(str.len)),
          };
      }
-
 diff --git a/src/shell/EnvStr.zig b/src/shell/EnvStr.zig
-index 0504ca9..7a414f5 100644
 --- a/src/shell/EnvStr.zig
 +++ b/src/shell/EnvStr.zig
 @@ -6,8 +6,10 @@
@@ -587,12 +589,12 @@ index 0504ca9..7a414f5 100644
 -    ptr: u48,
 +const PtrInt = if (@bitSizeOf(usize) == 64) u48 else u32;
 +
-+pub const EnvStr = packed struct(if (@bitSizeOf(usize) == 64) u128 else u96) {
++pub const EnvStr = packed struct(if (@bitSizeOf(usize) == 64) u128 else u80) {
 +    ptr: PtrInt,
      tag: Tag = .empty,
      len: usize = 0,
  
-@@ -36,9 +38,12 @@ pub const EnvStr = packed struct(u128) {
+@@ -36,9 +38,12 @@
          };
      }
  

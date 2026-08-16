@@ -1,0 +1,62 @@
+diff --git a/src/bun.js/bindings/CPUFeatures.zig b/src/bun.js/bindings/CPUFeatures.zig
+index 7efefbc..104f39f 100644
+--- a/src/bun.js/bindings/CPUFeatures.zig
++++ b/src/bun.js/bindings/CPUFeatures.zig
+@@ -28,6 +28,11 @@ pub const Flags = switch (@import("builtin").cpu.arch) {
+ 
+         padding: u1 = 0,
+     },
++    .arm => packed struct(u8) {
++        none: bool,
++
++        padding: u7 = 0,
++    },
+     else => unreachable,
+ };
+ 
+@@ -52,6 +57,7 @@ pub fn isEmpty(features: CPUFeatures) bool {
+ }
+ 
+ pub fn hasAnyAVX(features: CPUFeatures) bool {
++    if (comptime !bun.Environment.isX64) return false;
+     return features.flags.avx or features.flags.avx2 or features.flags.avx512;
+ }
+ 
+
+diff --git a/src/string.zig b/src/string.zig
+--- a/src/string.zig
++++ b/src/string.zig
+@@ -1271,6 +1271,13 @@
+ };
+ 
+ comptime {
+-    bun.assert_eql(@sizeOf(bun.String), 24);
+-    bun.assert_eql(@alignOf(bun.String), 8);
++    if (@bitSizeOf(usize) == 64) {
++        // ZigString is 24 bytes on 64-bit (ptr + len + flags) -> String = 32
++        bun.assert_eql(@sizeOf(bun.String), 32);
++        bun.assert_eql(@alignOf(bun.String), 8);
++    } else {
++        // 32-bit: tag (u8, padded to 4) + union of ZigString / WTFStringImpl (12 bytes)
++        bun.assert_eql(@sizeOf(bun.String), 16);
++        bun.assert_eql(@alignOf(bun.String), 4);
++    }
+ }
+diff --git a/src/js_ast.zig b/src/js_ast.zig
+index 9f50df2..65955b4 100644
+--- a/src/js_ast.zig
++++ b/src/js_ast.zig
+@@ -1107,8 +1107,11 @@ pub const Symbol = struct {
+     has_been_assigned_to: bool = false,
+ 
+     comptime {
+-        bun.assert_eql(@sizeOf(Symbol), 88);
+-        bun.assert_eql(@alignOf(Symbol), @alignOf([]const u8));
++        // TODO: verify the 32-bit layout of Symbol
++        if (@bitSizeOf(usize) == 64) {
++            bun.assert_eql(@sizeOf(Symbol), 88);
++            bun.assert_eql(@alignOf(Symbol), @alignOf([]const u8));
++        }
+     }
+ 
+     const invalid_chunk_index = std.math.maxInt(u32);

@@ -1,0 +1,325 @@
+diff --git a/src/allocators/memory_allocator.zig b/src/allocators/memory_allocator.zig
+index a6785c4..f369302 100644
+--- a/src/allocators/memory_allocator.zig
++++ b/src/allocators/memory_allocator.zig
+@@ -135,10 +135,10 @@ const ZAllocator = struct {
+ };
+ 
+ const memory_allocator_tags = struct {
+-    const default_allocator_tag: usize = 0xBEEFA110C; // "BEEFA110C"  beef a110c i guess
++    const default_allocator_tag: usize = if (@bitSizeOf(usize) == 64) 0xBEEFA110C else 0xBEEFA110; // "BEEFA110C"  beef a110c i guess
+     pub const default_allocator_tag_ptr: *anyopaque = @ptrFromInt(default_allocator_tag);
+ 
+-    const z_allocator_tag: usize = 0x2a11043470123; // "z4110c4701" (Z ALLOCATOR in 1337 speak)
++    const z_allocator_tag: usize = if (@bitSizeOf(usize) == 64) 0x2a11043470123 else 0x2a110434; // "z4110c4701" (Z ALLOCATOR in 1337 speak)
+     pub const z_allocator_tag_ptr: *anyopaque = @ptrFromInt(z_allocator_tag);
+ };
+ 
+
+diff --git a/src/bun.js/ConsoleObject.zig b/src/bun.js/ConsoleObject.zig
+index 0a180a8..00cda86 100644
+--- a/src/bun.js/ConsoleObject.zig
++++ b/src/bun.js/ConsoleObject.zig
+@@ -1547,7 +1547,7 @@ pub const Formatter = struct {
+                                     1;
+                                 this.addForNewLine(digits);
+                             } else {
+-                                this.addForNewLine(std.fmt.count("{d}", .{int}));
++this.addForNewLine(@as(usize, @intCast(std.fmt.count("{d}", .{int}))));
+                             }
+                             writer.print("{d}", .{int});
+                         },
+
+diff --git a/src/bun.js/api/BunObject.zig b/src/bun.js/api/BunObject.zig
+--- a/src/bun.js/api/BunObject.zig
++++ b/src/bun.js/api/BunObject.zig
+@@ -1178,7 +1178,7 @@
+         return globalThis.throwInvalidArguments("Expected a positive number", .{});
+     }
+ 
+-    return JSC.JSValue.createUninitializedUint8Array(globalThis, size.toUInt64NoTruncate());
++    return JSC.JSValue.createUninitializedUint8Array(globalThis, @as(usize, @intCast(size.toUInt64NoTruncate())));
+ }
+ 
+ pub fn mmapFile(globalThis: *JSC.JSGlobalObject, callframe: *JSC.CallFrame) bun.JSError!JSC.JSValue {
+diff --git a/src/bun.js/bindings/JSValue.zig b/src/bun.js/bindings/JSValue.zig
+index ea24587..0fcfd38 100644
+--- a/src/bun.js/bindings/JSValue.zig
++++ b/src/bun.js/bindings/JSValue.zig
+@@ -1173,7 +1173,10 @@ pub const JSValue = enum(i64) {
+             return jsNumberFromInt32(@as(i32, @intCast(i)));
+         }
+ 
+-        return jsNumberFromPtrSize(i);
++        if (comptime @bitSizeOf(usize) == 64) {
++            return jsNumberFromPtrSize(i);
++        }
++        return jsNumberFromDouble(@floatFromInt(i));
+     }
+ 
+     pub fn jsNumberFromPtrSize(i: usize) JSValue {
+@@ -2528,17 +2531,17 @@ pub const JSValue = enum(i64) {
+ 
+     // TODO: remove this (no replacement)
+     pub inline fn asRef(this: JSValue) C_API.JSValueRef {
+-        return @as(C_API.JSValueRef, @ptrFromInt(@as(usize, @bitCast(@intFromEnum(this)))));
++        return @as(C_API.JSValueRef, @ptrFromInt(@as(usize, @truncate(@as(u64, @bitCast(@intFromEnum(this)))))));
+     }
+ 
+     // TODO: remove this (no replacement)
+     pub inline fn c(this: C_API.JSValueRef) JSValue {
+-        return @as(JSValue, @enumFromInt(@as(backing_int, @bitCast(@intFromPtr(this)))));
++        return @as(JSValue, @enumFromInt(@as(backing_int, @intCast(@intFromPtr(this)))));
+     }
+ 
+     // TODO: remove this (no replacement)
+     pub inline fn fromRef(this: C_API.JSValueRef) JSValue {
+-        return @as(JSValue, @enumFromInt(@as(backing_int, @bitCast(@intFromPtr(this)))));
++        return @as(JSValue, @enumFromInt(@as(backing_int, @intCast(@intFromPtr(this)))));
+     }
+ 
+     // TODO: remove this (no replacement)
+@@ -2554,7 +2557,7 @@ pub const JSValue = enum(i64) {
+     }
+ 
+     pub inline fn asNullableVoid(this: JSValue) ?*anyopaque {
+-        return @as(?*anyopaque, @ptrFromInt(@as(usize, @bitCast(@intFromEnum(this)))));
++        return @as(?*anyopaque, @ptrFromInt(@as(usize, @truncate(@as(u64, @bitCast(@intFromEnum(this)))))));
+     }
+ 
+     pub inline fn asVoid(this: JSValue) *anyopaque {
+
+diff --git a/src/bun.js/javascript_core_c_api.zig b/src/bun.js/javascript_core_c_api.zig
+index 7ac6438..5add4c9 100644
+--- a/src/bun.js/javascript_core_c_api.zig
++++ b/src/bun.js/javascript_core_c_api.zig
+@@ -9,7 +9,7 @@ const std = @import("std");
+ const JSC = bun.JSC;
+ const generic = opaque {
+     pub fn value(this: *const generic) JSC.JSValue {
+-        return @enumFromInt(@as(JSC.JSValue.backing_int, @bitCast(@intFromPtr(this))));
++        return @enumFromInt(@as(JSC.JSValue.backing_int, @intCast(@intFromPtr(this))));
+     }
+ };
+ pub const Private = anyopaque;
+
+diff --git a/src/bun.js/node/node_crypto_binding.zig b/src/bun.js/node/node_crypto_binding.zig
+index c45c62f..c44ba4e 100644
+--- a/src/bun.js/node/node_crypto_binding.zig
++++ b/src/bun.js/node/node_crypto_binding.zig
+@@ -666,7 +666,7 @@ const Scrypt = struct {
+             N,
+             r,
+             p,
+-            maxmem,
++            @as(usize, @intCast(maxmem)),
+             null,
+             0,
+         ) == 0) {
+@@ -704,7 +704,7 @@ const Scrypt = struct {
+             this.N,
+             this.r,
+             this.p,
+-            this.maxmem,
++            @as(usize, @intCast(this.maxmem)),
+             key.ptr,
+             key.len,
+         );
+
+diff --git a/src/bun.js/node/node_fs_binding.zig b/src/bun.js/node/node_fs_binding.zig
+index 565315a..b9e185c 100644
+--- a/src/bun.js/node/node_fs_binding.zig
++++ b/src/bun.js/node/node_fs_binding.zig
+@@ -235,7 +235,7 @@ pub fn createMemfdForTesting(globalObject: *JSC.JSGlobalObject, callFrame: *JSC.
+     const size = arguments.ptr[0].toInt64();
+     switch (bun.sys.memfd_create("my_memfd", std.os.linux.MFD.CLOEXEC)) {
+         .result => |fd| {
+-            _ = bun.sys.ftruncate(fd, size);
++            _ = bun.sys.ftruncate(fd, @as(isize, @intCast(size)));
+             return JSC.JSValue.jsNumber(fd.cast());
+         },
+         .err => |err| {
+
+diff --git a/src/bun.js/node/node_os.zig b/src/bun.js/node/node_os.zig
+--- a/src/bun.js/node/node_os.zig
++++ b/src/bun.js/node/node_os.zig
+@@ -888,7 +898,7 @@ pub fn totalmem() u64 {
+         },
+         .linux => {
+             var info: c.struct_sysinfo = undefined;
+-            if (c.sysinfo(&info) == @as(c_int, 0)) return @as(u64, @bitCast(info.totalram)) *% @as(c_ulong, @bitCast(@as(c_ulong, info.mem_unit)));
++            if (c.sysinfo(&info) == @as(c_int, 0)) return @as(u64, info.totalram) *% @as(c_ulong, @bitCast(@as(c_ulong, info.mem_unit)));
+             return 0;
+         },
+         .windows => {
+
+diff --git a/src/bun.js/test/expect.zig b/src/bun.js/test/expect.zig
+index a7239ae..f1cd490 100644
+--- a/src/bun.js/test/expect.zig
++++ b/src/bun.js/test/expect.zig
+@@ -5461,7 +5461,7 @@ pub const ExpectCustomAsymmetricMatcher = struct {
+         // prepare the args array as `[received, ...captured_args]`
+         const args_count = captured_args.getLength(globalThis);
+         var allocator = std.heap.stackFallback(8 * @sizeOf(JSValue), globalThis.allocator());
+-        var matcher_args = std.ArrayList(JSValue).initCapacity(allocator.get(), args_count + 1) catch {
++        var matcher_args = std.ArrayList(JSValue).initCapacity(allocator.get(), @as(usize, @intCast(args_count + 1))) catch {
+             globalThis.throwOutOfMemory() catch {};
+             return false;
+         };
+
+diff --git a/src/bun.js/webcore/streams.zig b/src/bun.js/webcore/streams.zig
+--- a/src/bun.js/webcore/streams.zig
++++ b/src/bun.js/webcore/streams.zig
+@@ -722,7 +722,7 @@
+ 
+         fn handleWrote(this: *@This(), amount1: usize) void {
+             defer log("handleWrote: {d} offset: {d}, {d}", .{ amount1, this.offset, this.buffer.len });
+-            const amount = @as(Blob.SizeType, @truncate(amount1));
++            const amount = @as(Blob.SizeType, @intCast(amount1));
+             this.offset += amount;
+             this.wrote += amount;
+ 
+@@ -789,7 +789,7 @@
+         }
+ 
+         fn readableSlice(this: *@This()) []const u8 {
+-            return this.buffer.ptr[this.offset..this.buffer.len];
++            return this.buffer.ptr[@as(usize, @intCast(this.offset))..this.buffer.len];
+         }
+ 
+         pub fn onWritable(this: *@This(), write_offset: u64, _: *UWSResponse) bool {
+@@ -809,8 +809,8 @@
+             // do not write more than available
+             // if we do, it will cause this to be delayed until the next call, each time
+             // TODO: should we break it in smaller chunks?
+-            const to_write = @min(@as(Blob.SizeType, @truncate(write_offset)), @as(Blob.SizeType, this.buffer.len - 1));
+-            const chunk = this.readableSlice()[to_write..];
++            const to_write = @min(@as(Blob.SizeType, @intCast(write_offset)), @as(Blob.SizeType, this.buffer.len - 1));
++            const chunk = this.readableSlice()[@as(usize, @intCast(to_write))..];
+             // if we have nothing to write, we are done
+             if (chunk.len == 0) {
+                 if (this.done) {
+@@ -885,7 +885,7 @@
+ 
+             var list = this.buffer.listManaged(this.allocator);
+             list.clearRetainingCapacity();
+-            list.ensureTotalCapacityPrecise(this.highWaterMark) catch return .{ .err = Syscall.Error.oom };
++            list.ensureTotalCapacityPrecise(@as(usize, @intCast(this.highWaterMark))) catch return .{ .err = Syscall.Error.oom };
+             this.buffer.update(list);
+ 
+             this.done = false;
+@@ -976,7 +976,7 @@
+             }
+ 
+             const bytes = data.slice();
+-            const len = @as(Blob.SizeType, @truncate(bytes.len));
++            const len = @as(Blob.SizeType, @intCast(bytes.len));
+             log("write({d})", .{bytes.len});
+ 
+             if (this.buffer.len == 0 and len >= this.highWaterMark) {
+@@ -1024,7 +1024,7 @@
+             }
+ 
+             const bytes = data.slice();
+-            const len = @as(Blob.SizeType, @truncate(bytes.len));
++            const len = @as(Blob.SizeType, @intCast(bytes.len));
+             log("writeLatin1({d})", .{bytes.len});
+ 
+             if (this.buffer.len == 0 and len >= this.highWaterMark) {
+@@ -1491,7 +1491,7 @@
+             return .{ .owned = 0 };
+         }
+         const bytes = data.slice();
+-        const len = @as(Blob.SizeType, @truncate(bytes.len));
++        const len = @as(Blob.SizeType, @intCast(bytes.len));
+ 
+         if (this.buffer.size() == 0 and len >= this.getHighWaterMark()) {
+             // fast path:
+@@ -1525,7 +1525,7 @@
+         }
+ 
+         const bytes = data.slice();
+-        const len = @as(Blob.SizeType, @truncate(bytes.len));
++        const len = @as(Blob.SizeType, @intCast(bytes.len));
+ 
+         if (this.buffer.size() == 0 and len >= this.getHighWaterMark()) {
+             // common case
+diff --git a/src/crash_handler.zig b/src/crash_handler.zig
+--- a/src/crash_handler.zig
++++ b/src/crash_handler.zig
+@@ -1345,7 +1396,7 @@ fn encodeTraceString(opts: TraceString, writer: anytype) !void {
+     }
+ }
+ 
+-fn writeU64AsTwoVLQs(writer: anytype, addr: usize) !void {
++fn writeU64AsTwoVLQs(writer: anytype, addr: u64) !void {
+     const first = VLQ.encode(@bitCast(@as(u32, @intCast((addr & 0xFFFFFFFF00000000) >> 32))));
+     const second = VLQ.encode(@bitCast(@as(u32, @intCast(addr & 0xFFFFFFFF))));
+     try first.writeTo(writer);
+
+diff --git a/src/fmt.zig b/src/fmt.zig
+index 32f10ae..baf675c 100644
+--- a/src/fmt.zig
++++ b/src/fmt.zig
+@@ -1434,7 +1434,7 @@ pub fn fastDigitCount(x: u64) u64 {
+         42949672960,
+         42949672960,
+     };
+-    return x + table[std.math.log2(x)] >> 32;
++    return x + table[@as(usize, @intCast(std.math.log2(x)))] >> 32;
+ }
+ 
+ pub const SizeFormatter = struct {
+
+diff --git a/src/bun.js/bindgen_test.zig b/src/bun.js/bindgen_test.zig
+index 3f3f636..a771d26 100644
+--- a/src/bun.js/bindgen_test.zig
++++ b/src/bun.js/bindgen_test.zig
+@@ -22,9 +22,9 @@ pub fn requiredAndOptionalArg(a: bool, b: ?usize, c: i32, d: ?u8) i32 {
+     const b_nonnull = b orelse {
+         return (123456 +% c) +% (d orelse 0);
+     };
+-    var math_result: i32 = @truncate(@as(isize, @as(u53, @truncate(
++    var math_result: i32 = @truncate(@as(isize, @intCast(
+         (b_nonnull +% @as(usize, @abs(c))) *% (d orelse 1),
+-    ))));
++    )));
+     if (a) {
+         math_result = -math_result;
+     }
+
+diff --git a/src/string_immutable.zig b/src/string_immutable.zig
+index 5ff63a9..dd94fd8 100644
+--- a/src/string_immutable.zig
++++ b/src/string_immutable.zig
+@@ -2292,7 +2292,11 @@ pub fn toUTF8ListWithTypeBun(list: *std.ArrayList(u8), comptime Type: type, utf1
+ 
+         const count: usize = replacement.utf8Width();
+         if (comptime Environment.isNative) {
+-            try list.ensureTotalCapacityPrecise(i + count + list.items.len + @as(usize, @intFromFloat((@as(f64, @floatFromInt(@as(u52, @truncate(utf16_remaining.len)))) * 1.2))));
++            const utf16_len_f: f64 = if (comptime @bitSizeOf(usize) == 64)
++                @floatFromInt(@as(u52, @truncate(utf16_remaining.len)))
++            else
++                @floatFromInt(utf16_remaining.len);
++            try list.ensureTotalCapacityPrecise(i + count + list.items.len + @as(usize, @intFromFloat(utf16_len_f * 1.2)));
+         } else {
+             try list.ensureTotalCapacityPrecise(i + count + list.items.len + utf16_remaining.len + 4);
+         }
+
+diff --git a/src/semver/SemverString.zig b/src/semver/SemverString.zig
+index 3937fa0..8de81ea 100644
+--- a/src/semver/SemverString.zig
++++ b/src/semver/SemverString.zig
+@@ -205,12 +205,6 @@ pub const String = extern struct {
+     // X64 seems to need some of the pointer bits
+     const max_addressable_space = u63;
+ 
+-    comptime {
+-        if (@sizeOf(usize) != 8) {
+-            @compileError("This code needs to be updated for non-64-bit architectures");
+-        }
+-    }
+-
+     pub const HashContext = struct {
+         a_buf: []const u8,
+         b_buf: []const u8,

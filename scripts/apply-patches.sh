@@ -107,6 +107,15 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # PathString/EnvStr layouts and the Android ABI fix (.androideabi)
     echo ">>> Applying Bun 32-bit ZigString/tagged-pointer/EnvStr foundations patch..."
     git apply "$REPO_ROOT/patches/bun/android-arm32-zig-foundations.patch"
+    # 32-bit integer width fixes: u64/usize/u53/u52 cast and bitCast sites,
+    # 32-bit allocator tags, crash-handler u64 VLQ writer, SemverString error removal
+    echo ">>> Applying Bun 32-bit integer-cast fixes patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-zig-casts.patch"
+    # 32-bit architecture fixes: CPUFeatures .arm case + AVX guard, and the
+    # bun.String/Symbol size assertions (bun.String is 32 bytes on 64-bit with
+    # the unconditional ZigString flags field, 16 bytes on 32-bit)
+    echo ">>> Applying Bun 32-bit arch/assert fixes patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-zig-arch.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
