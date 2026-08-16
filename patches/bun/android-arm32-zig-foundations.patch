@@ -1,0 +1,612 @@
+
+diff --git a/src/env.zig b/src/env.zig
+--- a/src/env.zig
++++ b/src/env.zig
+@@ -21,10 +21,11 @@
+ pub const isDebug = @import("builtin").mode == .Debug;
+ pub const isTest = @import("builtin").is_test;
+ pub const isLinux = @import("builtin").target.os.tag == .linux;
+-pub const isAndroid = isLinux and @import("builtin").target.abi == .android;
++pub const isAndroid = isLinux and (@import("builtin").target.abi == .android or @import("builtin").target.abi == .androideabi);
+ pub const isAarch64 = @import("builtin").target.cpu.arch.isAARCH64();
+ pub const isX86 = @import("builtin").target.cpu.arch.isX86();
+ pub const isX64 = @import("builtin").target.cpu.arch == .x86_64;
++pub const isArm32 = @import("builtin").target.cpu.arch == .arm;
+ pub const isMusl = !isAndroid and builtin.target.abi.isMusl();
+ pub const allow_assert = isDebug or isTest or std.builtin.Mode.ReleaseSafe == @import("builtin").mode;
+ pub const show_crash_trace = isDebug or isTest or enable_asan;
+@@ -144,6 +145,7 @@
+ pub const Architecture = enum {
+     x64,
+     arm64,
++    arm32,
+     wasm,
+ 
+     /// npm package name, `@oven-sh/bun-{os}-{arch}`
+@@ -151,6 +153,7 @@
+         return switch (this) {
+             .x64 => "x64",
+             .arm64 => "aarch64",
++            .arm32 => "arm32",
+             .wasm => "wasm",
+         };
+     }
+@@ -161,6 +164,8 @@
+         .{ "amd64", .x64 },
+         .{ "aarch64", .arm64 },
+         .{ "arm64", .arm64 },
++        .{ "arm", .arm32 },
++        .{ "arm32", .arm32 },
+         .{ "wasm", .wasm },
+     });
+ };
+@@ -171,5 +176,7 @@
+     .x64
+ else if (isAarch64)
+     .arm64
++else if (isArm32)
++    .arm32
+ else
+     @compileError("Please add your architecture to the Architecture enum");
+
+diff --git a/src/bun.js/bindings/ZigString.zig b/src/bun.js/bindings/ZigString.zig
+index f7d9569..b692968 100644
+--- a/src/bun.js/bindings/ZigString.zig
++++ b/src/bun.js/bindings/ZigString.zig
+@@ -17,12 +17,26 @@ const Environment = bun.Environment;
+ const Mimalloc = bun.Mimalloc;
+ 
+ /// Prefer using bun.String instead of ZigString in new code.
+-pub const ZigString = extern struct {
+-    /// This can be a UTF-16, Latin1, or UTF-8 string.
+-    /// The pointer itself is tagged, so it cannot be used without untagging it first
+-    /// Accessing it directly is unsafe.
+-    _unsafe_ptr_do_not_use: [*]const u8,
+-    len: usize,
++pub const ZigString = if (@bitSizeOf(usize) == 64)
++    extern struct {
++        /// This can be a UTF-16, Latin1, or UTF-8 string.
++        /// The pointer itself is tagged, so it cannot be used without untagging it first
++        /// Accessing it directly is unsafe.
++        _unsafe_ptr_do_not_use: [*]const u8,
++        len: usize,
++    }
++else
++    extern struct {
++        /// This can be a UTF-16, Latin1, or UTF-8 string.
++        /// On 64-bit targets the pointer itself is tagged, so it cannot be used without
++        /// untagging it first. Accessing it directly is unsafe.
++        /// On 32-bit targets the pointer has no spare bits for tags, so the tag flags
++        /// are stored in the `flags` field instead (bit0: UTF-16, bit1: UTF-8,
++        /// bit2: globally allocated, bit3: static). Must match the C++ ZigString struct.
++        _unsafe_ptr_do_not_use: [*]const u8,
++        len: usize,
++        flags: u8 = 0,
++    };
+ 
+     pub const ByteString = union(enum) {
+         latin1: []const u8,
+@@ -322,11 +336,18 @@ pub const ZigString = extern struct {
+     }
+ 
+     pub fn markStatic(this: *ZigString) void {
+-        this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 60)));
++        if (comptime @bitSizeOf(usize) == 64) {
++            this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 60)));
++        } else {
++            this.flags |= 0b1000;
++        }
+     }
+ 
+     pub fn isStatic(this: *const ZigString) bool {
+-        return @intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 60) != 0;
++        if (comptime @bitSizeOf(usize) == 64) {
++            return @intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 60) != 0;
++        }
++        return (this.flags & 0b1000) != 0;
+     }
+ 
+     pub const Slice = struct {
+@@ -460,7 +481,10 @@ pub const ZigString = extern struct {
+     };
+ 
+     pub inline fn is16Bit(this: *const ZigString) bool {
+-        return (@intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 63)) != 0;
++        if (comptime @bitSizeOf(usize) == 64) {
++            return (@intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 63)) != 0;
++        }
++        return (this.flags & 0b001) != 0;
+     }
+ 
+     pub inline fn utf16Slice(this: *const ZigString) []align(1) const u16 {
+@@ -610,15 +634,26 @@ pub const ZigString = extern struct {
+     }
+ 
+     pub fn isUTF8(this: ZigString) bool {
+-        return (@intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 61)) != 0;
++        if (comptime @bitSizeOf(usize) == 64) {
++            return (@intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 61)) != 0;
++        }
++        return (this.flags & 0b010) != 0;
+     }
+ 
+     pub fn markUTF8(this: *ZigString) void {
+-        this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 61)));
++        if (comptime @bitSizeOf(usize) == 64) {
++            this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 61)));
++        } else {
++            this.flags |= 0b010;
++        }
+     }
+ 
+     pub fn markUTF16(this: *ZigString) void {
+-        this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 63)));
++        if (comptime @bitSizeOf(usize) == 64) {
++            this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 63)));
++        } else {
++            this.flags |= 0b001;
++        }
+     }
+ 
+     pub fn setOutputEncoding(this: *ZigString) void {
+@@ -627,7 +662,10 @@ pub const ZigString = extern struct {
+     }
+ 
+     pub inline fn isGloballyAllocated(this: ZigString) bool {
+-        return (@intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 62)) != 0;
++        if (comptime @bitSizeOf(usize) == 64) {
++            return (@intFromPtr(this._unsafe_ptr_do_not_use) & (1 << 62)) != 0;
++        }
++        return (this.flags & 0b100) != 0;
+     }
+ 
+     pub inline fn deinitGlobal(this: ZigString) void {
+@@ -637,7 +675,11 @@ pub const ZigString = extern struct {
+     pub const mark = markGlobal;
+ 
+     pub inline fn markGlobal(this: *ZigString) void {
+-        this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 62)));
++        if (comptime @bitSizeOf(usize) == 64) {
++            this._unsafe_ptr_do_not_use = @as([*]const u8, @ptrFromInt(@intFromPtr(this._unsafe_ptr_do_not_use) | (1 << 62)));
++        } else {
++            this.flags |= 0b100;
++        }
+     }
+ 
+     pub fn format(self: ZigString, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+@@ -663,7 +705,10 @@ pub const ZigString = extern struct {
+     pub inline fn untagged(ptr: [*]const u8) [*]const u8 {
+         // this can be null ptr, so long as it's also a 0 length string
+         @setRuntimeSafety(false);
+-        return @as([*]const u8, @ptrFromInt(@as(u53, @truncate(@intFromPtr(ptr)))));
++        if (comptime @bitSizeOf(usize) == 64) {
++            return @as([*]const u8, @ptrFromInt(@as(u53, @truncate(@intFromPtr(ptr)))));
++        }
++        return ptr;
+     }
+ 
+     pub fn slice(this: *const ZigString) []const u8 {
+
+diff --git a/src/bun.js/bindings/headers-handwritten.h b/src/bun.js/bindings/headers-handwritten.h
+index d4b56c8..2ee3efa 100644
+--- a/src/bun.js/bindings/headers-handwritten.h
++++ b/src/bun.js/bindings/headers-handwritten.h
+@@ -19,6 +19,12 @@ class String;
+ typedef struct ZigString {
+     const unsigned char* ptr;
+     size_t len;
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
++    // On 32-bit targets the pointer has no spare bits for tags.
++    // Tag flags are stored here instead (bit0: UTF-16, bit1: UTF-8, bit2: globally allocated, bit3: static).
++    // Must match the Zig ZigString extern struct.
++    unsigned char flags;
++#endif
+ } ZigString;
+ 
+ #ifndef __cplusplus
+
+diff --git a/src/bun.js/bindings/helpers.h b/src/bun.js/bindings/helpers.h
+index 0d1ee0e..c258be2 100644
+--- a/src/bun.js/bindings/helpers.h
++++ b/src/bun.js/bindings/helpers.h
+@@ -46,20 +46,52 @@ static void* untagVoid(const char16_t* ptr)
+     return untagVoid(reinterpret_cast<const unsigned char*>(ptr));
+ }
+ 
+-static bool isTaggedUTF16Ptr(const unsigned char* ptr)
++static bool isTaggedUTF16Ptr(const ZigString& str)
+ {
+-    return (reinterpret_cast<uintptr_t>(ptr) & (static_cast<uint64_t>(1) << 63)) != 0;
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
++    return (str.flags & 0x1) != 0;
++#else
++    return (reinterpret_cast<uintptr_t>(str.ptr) & (static_cast<uint64_t>(1) << 63)) != 0;
++#endif
+ }
+ 
+ // Do we need to convert the string from UTF-8 to UTF-16?
+-static bool isTaggedUTF8Ptr(const unsigned char* ptr)
++static bool isTaggedUTF8Ptr(const ZigString& str)
+ {
+-    return (reinterpret_cast<uintptr_t>(ptr) & (static_cast<uint64_t>(1) << 61)) != 0;
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
++    return (str.flags & 0x2) != 0;
++#else
++    return (reinterpret_cast<uintptr_t>(str.ptr) & (static_cast<uint64_t>(1) << 61)) != 0;
++#endif
+ }
+ 
+-static bool isTaggedExternalPtr(const unsigned char* ptr)
++static bool isTaggedExternalPtr(const ZigString& str)
+ {
+-    return (reinterpret_cast<uintptr_t>(ptr) & (static_cast<uint64_t>(1) << 62)) != 0;
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
++    return (str.flags & 0x4) != 0;
++#else
++    return (reinterpret_cast<uintptr_t>(str.ptr) & (static_cast<uint64_t>(1) << 62)) != 0;
++#endif
++}
++
++static ZigString makeZigString(const unsigned char* ptr, size_t len)
++{
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
++    return ZigString { ptr, len, 0 };
++#else
++    return ZigString { ptr, len };
++#endif
++}
++
++static ZigString makeUTF16ZigString(const UChar* ptr, size_t len)
++{
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
++    ZigString str { reinterpret_cast<const unsigned char*>(ptr), len, 0 };
++    str.flags |= 0x1;
++    return str;
++#else
++    return ZigString { taggedUTF16Ptr(ptr), len };
++#endif
+ }
+ 
+ static void free_global_string(void* str, void* ptr, unsigned len)
+@@ -77,19 +109,19 @@ static const WTF::String toString(ZigString str)
+     if (str.len == 0 || str.ptr == nullptr) {
+         return WTF::String();
+     }
+-    if (UNLIKELY(isTaggedUTF8Ptr(str.ptr))) {
+-        ASSERT_WITH_MESSAGE(!isTaggedExternalPtr(str.ptr), "UTF8 and external ptr are mutually exclusive. The external will never be freed.");
++    if (UNLIKELY(isTaggedUTF8Ptr(str))) {
++        ASSERT_WITH_MESSAGE(!isTaggedExternalPtr(str), "UTF8 and external ptr are mutually exclusive. The external will never be freed.");
+         return WTF::String::fromUTF8ReplacingInvalidSequences(std::span { untag(str.ptr), str.len });
+     }
+ 
+-    if (UNLIKELY(isTaggedExternalPtr(str.ptr))) {
++    if (UNLIKELY(isTaggedExternalPtr(str))) {
+         // This will fail if the string is too long. Let's make it explicit instead of an ASSERT.
+         if (UNLIKELY(str.len > Bun__stringSyntheticAllocationLimit)) {
+             free_global_string(nullptr, reinterpret_cast<void*>(const_cast<unsigned char*>(untag(str.ptr))), static_cast<unsigned>(str.len));
+             return {};
+         }
+ 
+-        return !isTaggedUTF16Ptr(str.ptr)
++        return !isTaggedUTF16Ptr(str)
+             ? WTF::String(WTF::ExternalStringImpl::create({ untag(str.ptr), str.len }, untagVoid(str.ptr), free_global_string))
+             : WTF::String(WTF::ExternalStringImpl::create(
+                   { reinterpret_cast<const UChar*>(untag(str.ptr)), str.len }, untagVoid(str.ptr), free_global_string));
+@@ -100,7 +132,7 @@ static const WTF::String toString(ZigString str)
+         return {};
+     }
+ 
+-    return !isTaggedUTF16Ptr(str.ptr)
++    return !isTaggedUTF16Ptr(str)
+         ? WTF::String(WTF::StringImpl::createWithoutCopying({ untag(str.ptr), str.len }))
+         : WTF::String(WTF::StringImpl::createWithoutCopying(
+               { reinterpret_cast<const UChar*>(untag(str.ptr)), str.len }));
+@@ -109,7 +141,7 @@ static const WTF::String toString(ZigString str)
+ static WTF::AtomString toAtomString(ZigString str)
+ {
+ 
+-    if (!isTaggedUTF16Ptr(str.ptr)) {
++    if (!isTaggedUTF16Ptr(str)) {
+         return makeAtomString(untag(str.ptr), str.len);
+     } else {
+         return makeAtomString(reinterpret_cast<const UChar*>(untag(str.ptr)), str.len);
+@@ -121,7 +153,7 @@ static const WTF::String toString(ZigString str, StringPointer ptr)
+     if (str.len == 0 || str.ptr == nullptr || ptr.len == 0) {
+         return WTF::String();
+     }
+-    if (UNLIKELY(isTaggedUTF8Ptr(str.ptr))) {
++    if (UNLIKELY(isTaggedUTF8Ptr(str))) {
+         return WTF::String::fromUTF8ReplacingInvalidSequences(std::span { &untag(str.ptr)[ptr.off], ptr.len });
+     }
+ 
+@@ -130,7 +162,7 @@ static const WTF::String toString(ZigString str, StringPointer ptr)
+         return {};
+     }
+ 
+-    return !isTaggedUTF16Ptr(str.ptr)
++    return !isTaggedUTF16Ptr(str)
+         ? WTF::String(WTF::StringImpl::createWithoutCopying({ &untag(str.ptr)[ptr.off], ptr.len }))
+         : WTF::String(WTF::StringImpl::createWithoutCopying(
+               { &reinterpret_cast<const UChar*>(untag(str.ptr))[ptr.off], ptr.len }));
+@@ -141,7 +173,7 @@ static const WTF::String toStringCopy(ZigString str, StringPointer ptr)
+     if (str.len == 0 || str.ptr == nullptr || ptr.len == 0) {
+         return WTF::String();
+     }
+-    if (UNLIKELY(isTaggedUTF8Ptr(str.ptr))) {
++    if (UNLIKELY(isTaggedUTF8Ptr(str))) {
+         return WTF::String::fromUTF8ReplacingInvalidSequences(std::span { &untag(str.ptr)[ptr.off], ptr.len });
+     }
+ 
+@@ -150,7 +182,7 @@ static const WTF::String toStringCopy(ZigString str, StringPointer ptr)
+         return {};
+     }
+ 
+-    return !isTaggedUTF16Ptr(str.ptr)
++    return !isTaggedUTF16Ptr(str)
+         ? WTF::String(WTF::StringImpl::create(std::span { &untag(str.ptr)[ptr.off], ptr.len }))
+         : WTF::String(WTF::StringImpl::create(
+               std::span { &reinterpret_cast<const UChar*>(untag(str.ptr))[ptr.off], ptr.len }));
+@@ -161,11 +193,11 @@ static const WTF::String toStringCopy(ZigString str)
+     if (str.len == 0 || str.ptr == nullptr) {
+         return WTF::String();
+     }
+-    if (UNLIKELY(isTaggedUTF8Ptr(str.ptr))) {
++    if (UNLIKELY(isTaggedUTF8Ptr(str))) {
+         return WTF::String::fromUTF8ReplacingInvalidSequences(std::span { untag(str.ptr), str.len });
+     }
+ 
+-    if (isTaggedUTF16Ptr(str.ptr)) {
++    if (isTaggedUTF16Ptr(str)) {
+         std::span<UChar> out;
+         auto impl = WTF::StringImpl::tryCreateUninitialized(str.len, out);
+         if (UNLIKELY(!impl))
+@@ -209,32 +241,32 @@ static ZigString toZigString(WTF::String* str)
+ {
+     return str->isEmpty()
+         ? ZigStringEmpty
+-        : ZigString { str->is8Bit() ? str->span8().data() : taggedUTF16Ptr(str->span16().data()),
+-              str->length() };
++        : str->is8Bit() ? makeZigString(str->span8().data(), str->length())
++                        : makeUTF16ZigString(str->span16().data(), str->length());
+ }
+ 
+ static ZigString toZigString(WTF::StringImpl& str)
+ {
+     return str.isEmpty()
+         ? ZigStringEmpty
+-        : ZigString { str.is8Bit() ? str.span8().data() : taggedUTF16Ptr(str.span16().data()),
+-              str.length() };
++        : str.is8Bit() ? makeZigString(str.span8().data(), str.length())
++                       : makeUTF16ZigString(str.span16().data(), str.length());
+ }
+ 
+ static ZigString toZigString(WTF::StringView& str)
+ {
+     return str.isEmpty()
+         ? ZigStringEmpty
+-        : ZigString { str.is8Bit() ? str.span8().data() : taggedUTF16Ptr(str.span16().data()),
+-              str.length() };
++        : str.is8Bit() ? makeZigString(str.span8().data(), str.length())
++                       : makeUTF16ZigString(str.span16().data(), str.length());
+ }
+ 
+ static ZigString toZigString(const WTF::StringView& str)
+ {
+     return str.isEmpty()
+         ? ZigStringEmpty
+-        : ZigString { str.is8Bit() ? str.span8().data() : taggedUTF16Ptr(str.span16().data()),
+-              str.length() };
++        : str.is8Bit() ? makeZigString(str.span8().data(), str.length())
++                       : makeUTF16ZigString(str.span16().data(), str.length());
+ }
+ 
+ static ZigString toZigString(JSC::JSString& str, JSC::JSGlobalObject* global)
+@@ -301,11 +333,11 @@ static const WTF::String toStringStatic(ZigString str)
+     if (str.len == 0 || str.ptr == nullptr) {
+         return WTF::String();
+     }
+-    if (UNLIKELY(isTaggedUTF8Ptr(str.ptr))) {
++    if (UNLIKELY(isTaggedUTF8Ptr(str))) {
+         abort();
+     }
+ 
+-    if (isTaggedUTF16Ptr(str.ptr)) {
++    if (isTaggedUTF16Ptr(str)) {
+         return WTF::String(AtomStringImpl::add(std::span { reinterpret_cast<const UChar*>(untag(str.ptr)), str.len }));
+     }
+ 
+@@ -358,7 +390,7 @@ static const JSC::Identifier toIdentifier(ZigString str, JSC::JSGlobalObject* gl
+     if (str.len == 0 || str.ptr == nullptr) {
+         return JSC::Identifier::EmptyIdentifier;
+     }
+-    WTF::String wtfstr = Zig::isTaggedExternalPtr(str.ptr) ? toString(str) : Zig::toStringCopy(str);
++    WTF::String wtfstr = Zig::isTaggedExternalPtr(str) ? toString(str) : Zig::toStringCopy(str);
+     JSC::Identifier id = JSC::Identifier::fromString(global->vm(), wtfstr);
+     return id;
+ }
+
+diff --git a/src/bun.js/bindings/bindings.cpp b/src/bun.js/bindings/bindings.cpp
+index 1830314..4d6a299 100644
+--- a/src/bun.js/bindings/bindings.cpp
++++ b/src/bun.js/bindings/bindings.cpp
+@@ -3069,7 +3069,7 @@ JSC::EncodedJSValue ZigString__toAtomicValue(const ZigString* arg0, JSC::JSGloba
+         return JSC::JSValue::encode(JSC::jsEmptyString(arg1->vm()));
+     }
+ 
+-    if (isTaggedUTF16Ptr(arg0->ptr)) {
++    if (isTaggedUTF16Ptr(*arg0)) {
+         if (auto impl = WTF::AtomStringImpl::lookUp(std::span { reinterpret_cast<const UChar*>(untag(arg0->ptr)), arg0->len })) {
+             return JSC::JSValue::encode(JSC::jsString(arg1->vm(), WTF::String(WTFMove(impl))));
+         }
+@@ -3108,7 +3108,7 @@ JSC::EncodedJSValue ZigString__toExternalValue(const ZigString* arg0, JSC::JSGlo
+         return JSC::JSValue::encode(JSC::jsEmptyString(arg1->vm()));
+     }
+ 
+-    if (Zig::isTaggedUTF16Ptr(str.ptr)) {
++    if (Zig::isTaggedUTF16Ptr(str)) {
+         auto ref = String(ExternalStringImpl::create({ reinterpret_cast<const UChar*>(Zig::untag(str.ptr)), str.len }, Zig::untagVoid(str.ptr), free_global_string));
+ 
+         return JSC::JSValue::encode(JSC::JSValue(JSC::jsString(
+@@ -3152,19 +3152,17 @@ void JSC__JSValue__toZigString(JSC::EncodedJSValue JSValue0, ZigString* arg1, JS
+     auto str = strValue->value(arg2);
+ 
+     if (str->is8Bit()) {
+-        arg1->ptr = str->span8().data();
++        *arg1 = Zig::makeZigString(str->span8().data(), str->length());
+     } else {
+-        arg1->ptr = Zig::taggedUTF16Ptr(str->span16().data());
++        *arg1 = Zig::makeUTF16ZigString(str->span16().data(), str->length());
+     }
+-
+-    arg1->len = str->length();
+ }
+ 
+ JSC::EncodedJSValue ZigString__external(const ZigString* arg0, JSC::JSGlobalObject* arg1, void* arg2, void (*ArgFn3)(void* arg0, void* arg1, size_t arg2))
+ {
+     ZigString str
+         = *arg0;
+-    if (Zig::isTaggedUTF16Ptr(str.ptr)) {
++    if (Zig::isTaggedUTF16Ptr(str)) {
+         return JSC::JSValue::encode(JSC::JSValue(JSC::jsString(
+             arg1->vm(),
+             WTF::String(ExternalStringImpl::create({ reinterpret_cast<const UChar*>(Zig::untag(str.ptr)), str.len }, arg2, ArgFn3)))));
+@@ -3180,7 +3178,7 @@ JSC::EncodedJSValue ZigString__toExternalValueWithCallback(const ZigString* arg0
+ 
+     ZigString str
+         = *arg0;
+-    if (Zig::isTaggedUTF16Ptr(str.ptr)) {
++    if (Zig::isTaggedUTF16Ptr(str)) {
+         return JSC::JSValue::encode(JSC::JSValue(JSC::jsOwnedString(
+             arg1->vm(),
+             WTF::String(ExternalStringImpl::create({ reinterpret_cast<const UChar*>(Zig::untag(str.ptr)), str.len }, nullptr, ArgFn2)))));
+
+diff --git a/src/bun.js/bindings/BunString.cpp b/src/bun.js/bindings/BunString.cpp
+index b58b531..a97e041 100644
+--- a/src/bun.js/bindings/BunString.cpp
++++ b/src/bun.js/bindings/BunString.cpp
+@@ -443,7 +443,7 @@ extern "C" void BunString__toWTFString(BunString* bunString)
+ {
+     WTF::String str;
+     if (bunString->tag == BunStringTag::ZigString) {
+-        if (Zig::isTaggedExternalPtr(bunString->impl.zig.ptr)) {
++        if (Zig::isTaggedExternalPtr(bunString->impl.zig)) {
+             str = Zig::toString(bunString->impl.zig);
+         } else {
+             str = Zig::toStringCopy(bunString->impl.zig);
+@@ -638,7 +638,7 @@ size_t BunString::utf8ByteLength(const WTF::String& str)
+ WTF::String BunString::toWTFString() const
+ {
+     if (this->tag == BunStringTag::ZigString) {
+-        if (Zig::isTaggedExternalPtr(this->impl.zig.ptr)) {
++        if (Zig::isTaggedExternalPtr(this->impl.zig)) {
+             return Zig::toString(this->impl.zig);
+         } else {
+             return Zig::toStringCopy(this->impl.zig);
+@@ -655,7 +655,7 @@ WTF::String BunString::toWTFString() const
+ WTF::String BunString::toWTFString(ZeroCopyTag) const
+ {
+     if (this->tag == BunStringTag::ZigString) {
+-        if (Zig::isTaggedUTF8Ptr(this->impl.zig.ptr)) {
++        if (Zig::isTaggedUTF8Ptr(this->impl.zig)) {
+             return Zig::toStringCopy(this->impl.zig);
+         } else {
+             return Zig::toString(this->impl.zig);
+@@ -684,7 +684,7 @@ WTF::String BunString::toWTFString(NonNullTag) const
+ WTF::String BunString::transferToWTFString()
+ {
+     if (this->tag == BunStringTag::ZigString) {
+-        if (Zig::isTaggedUTF8Ptr(this->impl.zig.ptr)) {
++        if (Zig::isTaggedUTF8Ptr(this->impl.zig)) {
+             auto str = Zig::toStringCopy(this->impl.zig);
+             *this = Zig::BunStringEmpty;
+             return str;
+
+diff --git a/src/ptr/tagged_pointer.zig b/src/ptr/tagged_pointer.zig
+index 36a3443..21594eb 100644
+--- a/src/ptr/tagged_pointer.zig
++++ b/src/ptr/tagged_pointer.zig
+@@ -28,7 +28,7 @@ pub const TaggedPointer = packed struct(u64) {
+         const address = @intFromPtr(ptr);
+ 
+         return TaggedPointer{
+-            ._ptr = @as(AddressableSize, @truncate(address)),
++            ._ptr = @as(AddressableSize, @intCast(address)),
+             .data = data,
+         };
+     }
+@@ -41,13 +41,13 @@ pub const TaggedPointer = packed struct(u64) {
+         const ValueType = @TypeOf(val);
+         return switch (ValueType) {
+             f64, i64, u64 => @bitCast(val),
+-            ?*anyopaque, *anyopaque => @bitCast(@intFromPtr(val)),
++            ?*anyopaque, *anyopaque => @bitCast(@as(u64, @intCast(@intFromPtr(val)))),
+             else => @compileError("Unsupported type: " ++ @typeName(ValueType)),
+         };
+     }
+ 
+     pub inline fn to(this: TaggedPointer) *anyopaque {
+-        return @ptrFromInt(@as(u64, @bitCast(this)));
++        return @ptrFromInt(@as(usize, @truncate(@as(u64, @bitCast(this)))));
+     }
+ };
+ 
+
+diff --git a/src/string/PathString.zig b/src/string/PathString.zig
+index 650ffb3..964b811 100644
+--- a/src/string/PathString.zig
++++ b/src/string/PathString.zig
+@@ -1,7 +1,7 @@
+ const std = @import("std");
+ const bun = @import("bun");
+ const PathIntLen = std.math.IntFittingRange(0, bun.MAX_PATH_BYTES);
+-const use_small_path_string_ = @bitSizeOf(usize) - @bitSizeOf(PathIntLen) >= 53;
++const use_small_path_string_ = @bitSizeOf(usize) == 32 or @bitSizeOf(usize) - @bitSizeOf(PathIntLen) >= 53;
+ 
+ const PathStringBackingIntType = if (use_small_path_string_) u64 else u128;
+ 
+@@ -37,7 +37,10 @@ pub const PathString = packed struct(PathStringBackingIntType) {
+         @setRuntimeSafety(false); // "cast causes pointer to be null" is fine here. if it is null, the len will be 0.
+ 
+         return .{
+-            .ptr = @as(PointerIntType, @truncate(@intFromPtr(str.ptr))),
++            .ptr = if (comptime @bitSizeOf(usize) == 64)
++                @as(PointerIntType, @truncate(@intFromPtr(str.ptr)))
++            else
++                @as(PointerIntType, @intCast(@intFromPtr(str.ptr))),
+             .len = @as(PathInt, @truncate(str.len)),
+         };
+     }
+
+diff --git a/src/shell/EnvStr.zig b/src/shell/EnvStr.zig
+index 0504ca9..7a414f5 100644
+--- a/src/shell/EnvStr.zig
++++ b/src/shell/EnvStr.zig
+@@ -6,8 +6,10 @@
+ /// don't want to incur the cost of heap allocating them and refcounting them
+ ///
+ /// So environment strings can be ref counted or borrowed slices
+-pub const EnvStr = packed struct(u128) {
+-    ptr: u48,
++const PtrInt = if (@bitSizeOf(usize) == 64) u48 else u32;
++
++pub const EnvStr = packed struct(if (@bitSizeOf(usize) == 64) u128 else u96) {
++    ptr: PtrInt,
+     tag: Tag = .empty,
+     len: usize = 0,
+ 
+@@ -36,9 +38,12 @@ pub const EnvStr = packed struct(u128) {
+         };
+     }
+ 
+-    fn toPtr(ptr_val: *const anyopaque) u48 {
+-        const num: [8]u8 = @bitCast(@intFromPtr(ptr_val));
+-        return @bitCast(num[0..6].*);
++    fn toPtr(ptr_val: *const anyopaque) PtrInt {
++        const num: [@sizeOf(usize)]u8 = @bitCast(@intFromPtr(ptr_val));
++        if (comptime @bitSizeOf(usize) == 64) {
++            return @bitCast(num[0..6].*);
++        }
++        return @bitCast(num[0..4].*);
+     }
+ 
+     pub fn initRefCounted(str: []const u8) EnvStr {

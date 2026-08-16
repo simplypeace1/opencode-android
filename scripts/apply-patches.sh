@@ -101,6 +101,12 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # and match BOTH Android ABIs: 32-bit ARM renders .androideabi, 64-bit .android.
     echo ">>> Applying Bun Zig NDK sysroot triple-based include patch..."
     git apply "$REPO_ROOT/patches/bun/android-zig-ndk-sysroot.patch"
+    # 32-bit ZigString ABI: on armv7 pointers have no spare bits for the UTF-16/
+    # UTF-8/global/static tags, so the tags move into a flags byte on both the
+    # Zig extern struct and the C++ ZigString; plus armv7 ZigString/tagged-pointer/
+    # PathString/EnvStr layouts and the Android ABI fix (.androideabi)
+    echo ">>> Applying Bun 32-bit ZigString/tagged-pointer/EnvStr foundations patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-zig-foundations.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
