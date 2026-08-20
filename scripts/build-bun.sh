@@ -99,11 +99,19 @@ cmake \
 echo ""
 echo ">>> Configure complete."
 
+# Download Zig vendor BEFORE the full build.
+# The clone-zig target downloads Bun's custom Zig fork to $BUN_SRC/vendor/zig/,
+# and fetches the vendored deps (mimalloc, etc.) into $BUN_SRC/vendor/.
+# We need Zig downloaded first so we can patch posix.zig before compilation starts.
+echo ">>> Downloading Zig vendor (clone-zig target)..."
+cd "$BUN_BUILD"
+ninja clone-zig || true  # May not exist as a standalone target in all versions
+
 # 32-bit: mimalloc's segment-map computes MI_SEGMENT_MAP_PART_SPAN in
 # 32-bit size_t arithmetic, where 31744 * 16MiB wraps to exactly zero —
 # a division by zero and a variable-length array at file scope. The deps
-# are fetched into $BUN_SRC/vendor during CMake configure, so patch the
-# vendored copy here (before ninja compiles it).
+# are fetched into $BUN_SRC/vendor by `ninja clone-zig`, so patch the
+# vendored copy AFTER the fetch, before ninja compiles it.
 MIMALLOC_SEGMAP="$BUN_SRC/vendor/mimalloc/src/segment-map.c"
 if [ "${ANDROID_ABI}" = "armeabi-v7a" ] && [ -f "$MIMALLOC_SEGMAP" ]; then
     echo ">>> Applying mimalloc 32-bit segment-map patch..."
@@ -123,14 +131,9 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ] && [ -f "$MIMALLOC_SEGMAP" ]; then
             }
         fi
     fi
+else
+    echo "WARNING: mimalloc vendor not found at $MIMALLOC_SEGMAP (may be fetched later)."
 fi
-
-# Download Zig vendor BEFORE the full build.
-# The clone-zig target downloads Bun's custom Zig fork to $BUN_SRC/vendor/zig/.
-# We need Zig downloaded first so we can patch posix.zig before compilation starts.
-echo ">>> Downloading Zig vendor (clone-zig target)..."
-cd "$BUN_BUILD"
-ninja clone-zig || true  # May not exist as a standalone target in all versions
 
 # Apply Zig vendor patch AFTER download, BEFORE build
 ZIG_POSIX="$BUN_SRC/vendor/zig/lib/std/posix.zig"
@@ -178,6 +181,15 @@ ninja -j"$JOBS" 2>&1 || {
         rm -rf "$BUN_BUILD/cache/zig" "$BUN_SRC/.zig-cache"
         mkdir -p "$BUN_BUILD/cache/zig/local" "$BUN_BUILD/cache/zig/global"
         ln -sfn "$BUN_BUILD/cache/zig/local" "$BUN_SRC/.zig-cache"
+        cd "$BUN_BUILD"
+        ninja -j"$JOBS"
+    elif [ "${ANDROID_ABI}" = "armeabi-v7a" ] && [ -f "$MIMALLOC_SEGMAP" ] && ! grep -q "MI_SEGMENT_MAP_MAX_PARTS      (1)" "$MIMALLOC_SEGMAP" 2>/dev/null; then
+        echo ">>> mimalloc segment-map patch not applied. Applying now and rebuilding..."
+        cd "$BUN_SRC/vendor/mimalloc"
+        patch -p1 --fuzz=3 < "$REPO_ROOT/patches/bun/android-arm32-mimalloc-segmap.patch" || {
+            echo "ERROR: mimalloc patch failed to apply"
+            exit 1
+        }
         cd "$BUN_BUILD"
         ninja -j"$JOBS"
     else
