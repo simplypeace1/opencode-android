@@ -17,6 +17,13 @@ export ZIG_VERSION="${ZIG_VERSION:-0.15.2}"
 export OPENCODE_VERSION="${OPENCODE_VERSION:-1.3.13}"
 export ANDROID_API="${ANDROID_API:-24}"
 
+# opentui is pinned to the last commit whose tree still had the old
+# packages/core/src/zig layout (the structure all our opentui Android
+# patches target). Upstream restructured Zig code into packages/native on
+# 2026-08-20; do NOT bump this until the patches are ported to the new
+# layout (see build-opentui.sh).
+export OPENTUI_COMMIT="${OPENTUI_COMMIT:-0d6f2fa8fe081439e4fcdb67af5e5ae6ac6fc0b0}"
+
 # Select target ABIs, either comma-split from TARGET_ABIS or single TARGET_ABI
 # Values: arm64-v8a (aarch64), armeabi-v7a (armv7a)
 export TARGET_ABI="${TARGET_ABI:-arm64-v8a}"

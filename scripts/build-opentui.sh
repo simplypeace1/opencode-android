@@ -24,6 +24,23 @@ else
     echo ">>> opentui source exists at $OPENTUI_SRC"
 fi
 
+# Pin to the known-good commit (see OPENTUI_COMMIT in env.sh). Upstream main
+# is a moving target (it restructured to packages/native on 2026-08-20, which
+# our patches don't target), so always check out the pinned revision.
+cd "$OPENTUI_SRC"
+CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+if [ -n "${OPENTUI_COMMIT:-}" ] && [ "$CURRENT_HEAD" != "$OPENTUI_COMMIT" ]; then
+    echo ">>> Pinning opentui to ${OPENTUI_COMMIT} (was ${CURRENT_HEAD:-<empty>})..."
+    git fetch --quiet --depth 1 origin "${OPENTUI_COMMIT}" || {
+        echo "ERROR: Could not fetch pinned opentui commit ${OPENTUI_COMMIT}"
+        exit 1
+    }
+    git checkout --quiet --detach "${OPENTUI_COMMIT}" || {
+        echo "ERROR: Could not checkout pinned opentui commit ${OPENTUI_COMMIT}"
+        exit 1
+    }
+fi
+
 # Apply opentui Android patches. Note: `zig build --libc` only affects the
 # linking phase (b.libc_file); the translate-c pass ignores it, so we also add
 # the NDK sysroot include dir to the translate-c steps via a separate patch.
@@ -33,7 +50,15 @@ apply_opentui_patch() {
         echo ">>> Applying opentui Android patch: $(basename "$patch_path")"
         cd "$OPENTUI_SRC"
         if ! git apply --check "$patch_path" 2>/dev/null; then
-            echo "    Patch already applied or does not apply cleanly, skipping"
+            # With the commit pin in place, a clean apply is expected. A skip
+            # here means the pinned tree doesn't match the patches (wrong pin)
+            # or the patch was already applied by a prior resume — refuse to
+            # continue silently, since an unpatched build produces a broken .so
+            # (missing libc.so NEEDED, translate-c failures, 64-bit atomics).
+            echo "ERROR: opentui patch does not apply cleanly at pinned commit ${OPENTUI_COMMIT:-<unset>}."
+            echo "       Expected the patch to apply. Check OPENTUI_COMMIT in scripts/env.sh."
+            git apply --check --verbose "$patch_path" 2>&1 | head -10
+            exit 1
         else
             git apply "$patch_path"
             echo "    Patch applied successfully"
@@ -57,6 +82,10 @@ OPENTUI_ZIG_DIR="$OPENTUI_SRC/packages/core/src/zig"
 
 if [ ! -f "$OPENTUI_ZIG_DIR/build.zig" ]; then
     echo "ERROR: build.zig not found at $OPENTUI_ZIG_DIR"
+    echo "       Expected the pre-2026-08-20 opentui layout (packages/core/src/zig)."
+    echo "       Upstream moved Zig code to packages/native; our Android patches"
+    echo "       (patches/opentui/*.patch) and this script have not been ported yet."
+    echo "       Check OPENTUI_COMMIT in scripts/env.sh."
     exit 1
 fi
 
