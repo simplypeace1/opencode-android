@@ -1,0 +1,12 @@
+diff --git a/src/valkey/valkey.zig b/src/valkey/valkey.zig
+index xxxxxxx..yyyyyyy 100644
+--- a/src/valkey/valkey.zig
++++ b/src/valkey/valkey.zig
+@@ -934,7 +934,7 @@ fn globalObject(this: *JSValkeyClient) *JSC.JSGlobalObject {
+ 
+ fn parent(this: *JSValkeyClient) *JSValkeyClient {
+-    return @fieldParentPtr("client", this);
++    return @fieldParentPtr("client", @alignCast(this));
+ }
+ 
+ pub fn init(

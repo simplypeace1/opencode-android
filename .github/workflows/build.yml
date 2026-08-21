@@ -72,6 +72,7 @@ jobs:
         with:
           path: |
             build-${{ env.ABI_SLUG }}/bun-build
+            build-${{ env.ABI_SLUG }}/bun-src/vendor
           key: opencode-bun-${{ env.ABI_SLUG }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             opencode-bun-${{ env.ABI_SLUG }}-
@@ -217,6 +218,7 @@ jobs:
         with:
           path: |
             build-${{ env.ABI_SLUG }}/bun-build
+            build-${{ env.ABI_SLUG }}/bun-src/vendor
           key: opencode-bun-${{ env.ABI_SLUG }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   build-apk:

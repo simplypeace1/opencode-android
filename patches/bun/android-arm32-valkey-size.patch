@@ -1,0 +1,12 @@
+diff --git a/src/valkey/ValkeyCommand.zig b/src/valkey/ValkeyCommand.zig
+index xxxxxxx..yyyyyyy 100644
+--- a/src/valkey/ValkeyCommand.zig
++++ b/src/valkey/ValkeyCommand.zig
+@@ -37,7 +37,7 @@ pub fn byteLength(this: *const Command) usize {
+ 
+ pub fn byteLength(this: *const Command) usize {
+-    return std.fmt.count("{}", .{this});
++    return @as(usize, @intCast(std.fmt.count("{}", .{this})));
+ }
+ 
+ pub fn create(this: *Command) !Command {

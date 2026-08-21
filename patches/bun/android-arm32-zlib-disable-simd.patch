@@ -1,0 +1,25 @@
+diff --git a/vendor/zlib/deflate.c b/vendor/zlib/deflate.c
+index xxxxxxx..yyyyyyy 100644
+--- a/vendor/zlib/deflate.c
++++ b/vendor/zlib/deflate.c
+@@ -140,7 +140,9 @@
+ #if defined(ARM_NEON) || defined(X86_SIMD)
+ #  define ARM_NEON_SIMD
+ #endif
+ 
++#if defined(__arm__) && !defined(__aarch64__)
++#  undef ARM_NEON_SIMD
++#endif
+ 
+ #ifdef ARM_NEON_SIMD
+ #  if defined(__ARM_NEON__) || defined(__ARM_NEON)
+@@ -149,7 +151,7 @@
+ #    error "Only 64-bit Intel and ARM architectures are supported"
+ #  endif
+ #endif
+ 
+-#ifdef ARM_NEON_SIMD
++#if defined(ARM_NEON_SIMD) && !defined(__arm__)
+ 
+ #  ifndef __ARM_NEON__
+ #    error "ARM NEON required"

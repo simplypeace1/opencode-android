@@ -103,9 +103,37 @@ echo ">>> Configure complete."
 # The clone-zig target downloads Bun's custom Zig fork to $BUN_SRC/vendor/zig/,
 # and fetches the vendored deps (mimalloc, etc.) into $BUN_SRC/vendor/.
 # We need Zig downloaded first so we can patch posix.zig before compilation starts.
-echo ">>> Downloading Zig vendor (clone-zig target)..."
-cd "$BUN_BUILD"
-ninja clone-zig || true  # May not exist as a standalone target in all versions
+#
+# If vendor/ was restored from cache (apply-patches.sh stashes and restores it
+# around the git clone), skip the expensive download entirely — DownloadUrl.cmake
+# unconditionally deletes and re-downloads, which destroys the cache benefit.
+if [ -d "$BUN_SRC/vendor/zig" ]; then
+    echo ">>> Vendor already cached — skipping clone-zig download"
+    # Backdate all vendor SOURCE files to epoch so ninja considers cached .o
+    # files (which have real timestamps) newer than vendor sources, and skips
+    # recompiling unchanged vendor translation units.
+    #
+    # IMPORTANT: Do NOT backdate ninja output artifacts (executables, stamp
+    # files, .ref markers). Ninja decides whether to re-run a build rule by
+    # comparing output mtime vs input mtime. If we backdate outputs like
+    # vendor/zig/zig to epoch, ninja sees output(mtime=0) < input(cmake
+    # script mtime) and re-triggers the download, destroying the cache.
+    # We only backdate source/header files (.c, .cpp, .h, .zig, .S, etc.).
+    echo "    Backdating vendor sources to epoch for ninja incremental resume..."
+    find "$BUN_SRC/vendor" -type f \( \
+        -name '*.c' -o -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' \
+        -o -name '*.h' -o -name '*.hpp' -o -name '*.hh' \
+        -o -name '*.zig' -o -name '*.S' -o -name '*.s' -o -name '*.asm' \
+        -o -name '*.cmake' -o -name '*.txt' -o -name '*.md' \
+        -o -name '*.json' -o -name '*.toml' -o -name '*.yaml' -o -name '*.yml' \
+        -o -name '*.py' -o -name '*.sh' -o -name '*.pl' \
+        -o -name '*.inc' -o -name '*.def' -o -name '*.in' \
+    \) -exec touch -h -d '@0' {} + 2>/dev/null || true
+else
+    echo ">>> Downloading Zig vendor (clone-zig target)..."
+    cd "$BUN_BUILD"
+    ninja clone-zig || true  # May not exist as a standalone target in all versions
+fi
 
 # 32-bit: mimalloc's segment-map computes MI_SEGMENT_MAP_PART_SPAN in
 # 32-bit size_t arithmetic, where 31744 * 16MiB wraps to exactly zero —

@@ -20,7 +20,27 @@ echo "=== Applying Patches ==="
 # --- Clone Bun ---
 if [ ! -d "$BUN_SRC/.git" ]; then
     echo ">>> Cloning Bun v${BUN_VERSION}..."
+    # If vendor/ was restored from cache before clone, move it aside so
+    # git clone gets an empty target dir, then restore it afterwards.
+    VENDOR_STASH=""
+    if [ -d "$BUN_SRC/vendor" ]; then
+        VENDOR_STASH="$(mktemp -d)"
+        echo "    Stashing cached vendor/ aside..."
+        mv "$BUN_SRC/vendor" "$VENDOR_STASH/vendor"
+        # git clone requires the target dir to NOT exist. Remove bun-src
+        # now that vendor has been moved out (it should be empty or have
+        # only cache-restored structure).
+        rm -rf "$BUN_SRC"
+    fi
     git clone --depth 1 --branch "${BUN_TAG}" https://github.com/oven-sh/bun.git "$BUN_SRC"
+    # Restore cached vendor/ into the freshly cloned tree
+    if [ -n "$VENDOR_STASH" ] && [ -d "$VENDOR_STASH/vendor" ]; then
+        echo "    Restoring cached vendor/ into bun-src..."
+        # Remove any skeleton vendor/ the clone created (unlikely, but safe)
+        rm -rf "$BUN_SRC/vendor"
+        mv "$VENDOR_STASH/vendor" "$BUN_SRC/vendor"
+        rm -rf "$VENDOR_STASH"
+    fi
 else
     echo ">>> Bun source already exists at $BUN_SRC"
 fi
@@ -123,6 +143,18 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # cast and byteLen sites across the codebase
     echo ">>> Applying Bun 32-bit u52/usize/size-format fixes patch..."
     git apply "$REPO_ROOT/patches/bun/android-arm32-zig-u52-fmt.patch"
+    # zlib SIMD optimizations (ARM_NEON_SIMD) only support 64-bit ARM (aarch64)
+    # On 32-bit ARM (armv7), the deflate.c SIMD path triggers a compile error.
+    echo ">>> Applying Bun 32-bit zlib SIMD disable patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch"
+    # valkey @fieldParentPtr alignment: on 32-bit ARM, pointer alignment is 4
+    # valkey @fieldParentPtr alignment: on 32-bit ARM, pointer alignment is 4
+    # but the code expects 8. Use @alignCast to preserve alignment.
+    echo ">>> Applying Bun 32-bit valkey @fieldParentPtr alignment patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-valkey-aligncast.patch"
+    # valkey integer-width: std.fmt.count returns u64, but usize is u32 on armv7
+    echo ">>> Applying Bun 32-bit valkey integer-width patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-valkey-size.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
