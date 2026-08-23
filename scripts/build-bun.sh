@@ -101,8 +101,12 @@ if command -v ccache >/dev/null 2>&1; then
     done
     export PATH="$CCACHE_SHIM:$PATH"
     echo "    ccache shims active: $CCACHE_SHIM/clang -> $(ccache --version | head -1)"
+    # Launcher covers the MAIN target; the PATH shim above covers vendors
+    # (register_cmake_command does not propagate launchers to sub-configures).
+    CCACHE_LAUNCHER_FLAGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
 else
     echo "    ccache not found - building without compile cache"
+    CCACHE_LAUNCHER_FLAGS=""
 fi
 
 cmake \
@@ -115,6 +119,7 @@ cmake \
     -DBUN_LINK_ONLY=OFF \
     -DWEBKIT_LOCAL=ON \
     -DWEBKIT_PATH="$WEBKIT_OUTPUT" \
+    ${CCACHE_LAUNCHER_FLAGS} \
     "$BUN_SRC"
 
 echo ""
@@ -244,6 +249,36 @@ else
     echo "         re-run this script to apply the patch and retry."
 fi
 
+# --- Sub-build resume report -------------------------------------------------
+# Proves whether cached vendor sub-builds were actually skipped. Parses the
+# ninja log for "Building C/CXX object <...>/<target>.dir/<file>.o" lines and
+# reports per-target compile counts; 0 compiles for a target whose artifacts
+# exist means the cache resume worked.
+print_resume_report() {
+    local LOG="$BUN_BUILD/ninja-latest.log"
+    [ -f "$LOG" ] || { echo "(no ninja log to report)"; return 0; }
+    echo ""
+    echo ">>> SUBBUILD RESUME REPORT (compile counts per target)"
+    awk '
+        /Building C\+\+ object|Building C object/ {
+            if (match($0, /[A-Za-z0-9_.+-]+\.dir\//)) {
+                t = substr($0, RSTART, RLENGTH - 5)
+                cnt[t]++
+            }
+        }
+        END {
+            total = 0
+            for (t in cnt) { printf("    REBUILT  %-24s %4d objects\n", t, cnt[t]); total += cnt[t] }
+            if (total == 0) print("    ALL SUB-BUILDS SKIPPED - fully resumed from cache")
+        }
+    ' "$LOG"
+}
+run_ninja_logged() {
+    # shellcheck disable=SC2086
+    ninja -j"$JOBS" 2>&1 | tee "$BUN_BUILD/ninja-latest.log"
+    return "${PIPESTATUS[0]}"
+}
+
 # Build
 echo ">>> Building Bun (this will take 30-45 minutes)..."
 # Just-in-time re-apply: if anything re-extracted vendor/zlib between the
@@ -252,7 +287,7 @@ apply_zlib_arm32_patch
 debug_zlib_state
 echo "    .zig-cache -> $(readlink -f "$BUN_SRC/.zig-cache" 2>/dev/null || echo 'NOT A SYMLINK')"
 cd "$BUN_BUILD"
-ninja -j"$JOBS" 2>&1 || {
+run_ninja_logged || {
     echo ""
     echo ">>> Build failed. Checking if Zig was downloaded during the build..."
     # If Zig was just downloaded during the build and the patch wasn't applied,
@@ -269,7 +304,7 @@ ninja -j"$JOBS" 2>&1 || {
         mkdir -p "$BUN_BUILD/cache/zig/local" "$BUN_BUILD/cache/zig/global"
         ln -sfn "$BUN_BUILD/cache/zig/local" "$BUN_SRC/.zig-cache"
         cd "$BUN_BUILD"
-        ninja -j"$JOBS"
+        run_ninja_logged || { print_resume_report; exit 1; }
     elif [ "${ANDROID_ABI}" = "armeabi-v7a" ] && [ -f "$MIMALLOC_SEGMAP" ] && ! grep -q "MI_SEGMENT_MAP_MAX_PARTS      (1)" "$MIMALLOC_SEGMAP" 2>/dev/null; then
         echo ">>> mimalloc segment-map patch not applied. Applying now and rebuilding..."
         cd "$BUN_SRC/vendor/mimalloc"
@@ -278,13 +313,16 @@ ninja -j"$JOBS" 2>&1 || {
             exit 1
         }
         cd "$BUN_BUILD"
-        ninja -j"$JOBS"
+        run_ninja_logged || { print_resume_report; exit 1; }
     else
         echo "ERROR: Build failed (Zig patch was already applied — different error)"
         debug_zlib_state
+        print_resume_report
         exit 1
     fi
 }
+
+print_resume_report
 
 # Verify output
 BUN_BINARY="$BUN_BUILD/bun"
@@ -299,6 +337,7 @@ if [ ! -f "$BUN_BINARY" ]; then
 fi
 
 echo ""
+print_resume_report
 echo "=== Bun build complete ==="
 echo "Binary: $BUN_BINARY"
 echo "Size: $(du -h "$BUN_BINARY" | cut -f1)"
