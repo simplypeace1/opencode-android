@@ -31,6 +31,17 @@ jobs:
     name: Build opencode (${{ matrix.abi }})
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    env:
+      CCACHE_DIR: /home/runner/.ccache
+      # Per-ABI key isolation inside one cache dir (ccache >= 4.4)
+      CCACHE_NAMESPACE: ${{ matrix.abi }}
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: "true"
+      CCACHE_MAXSIZE: "2G"
+      # include_file_mtime/ctime: generated headers get rewritten every run
+      # with identical content. Do NOT enable file_macro (__FILE__ false hits).
+      CCACHE_SLOPPINESS: include_file_mtime,include_file_ctime
+      CCACHE_DEPEND: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -77,13 +88,21 @@ jobs:
           restore-keys: |
             opencode-bun-${{ env.ABI_SLUG }}-
 
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: /home/runner/.ccache
+          key: ccache-ubuntu24-ndk${{ env.ANDROID_NDK_VERSION }}-${{ matrix.abi }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-ubuntu24-ndk${{ env.ANDROID_NDK_VERSION }}-${{ matrix.abi }}-
+
       - name: Install system packages
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             ninja-build python3 ruby perl \
             git curl wget unzip xz-utils zip file \
-            build-essential pkg-config \
+            build-essential pkg-config ccache \
             libxml2-dev libxslt1-dev \
             golang-go \
             bison flex gperf \
@@ -177,6 +196,13 @@ jobs:
           source scripts/env.sh
           ./scripts/build-bun.sh
 
+      - name: ccache stats
+        if: always()
+        run: |
+          ccache --show-stats || true
+          echo "=== top miss reasons ==="
+          ccache --show-log-stats 2>/dev/null | head -40 || true
+
       - name: Build OpenCode standalone binary
         run: |
           source scripts/env.sh
@@ -220,6 +246,13 @@ jobs:
             build-${{ env.ABI_SLUG }}/bun-build
             build-${{ env.ABI_SLUG }}/bun-src/vendor
           key: opencode-bun-${{ env.ABI_SLUG }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.ccache
+          key: ccache-ubuntu24-ndk${{ env.ANDROID_NDK_VERSION }}-${{ matrix.abi }}-${{ github.run_id }}
 
   build-apk:
     name: Build APK (arm64-v8a + armeabi-v7a)

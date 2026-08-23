@@ -84,6 +84,27 @@ fi
 echo ">>> Configuring Bun..."
 cd "$BUN_BUILD"
 
+# --- ccache PATH shim -------------------------------------------------------
+# Wrap the NDK compilers with ccache at PATH level so EVERY CMake sub-configure
+# (zlib, boringssl, c-ares, brotli, ...) picks it up: vendor sub-configures
+# inherit only CFLAGS from the parent (never CMAKE_TOOLCHAIN_FILE), so a
+# launcher set in the toolchain file would miss them all. Resolve the real
+# compiler BEFORE prepending the shim dir to avoid recursion.
+if command -v ccache >/dev/null 2>&1; then
+    CCACHE_SHIM="$WORK_DIR/ccache-bin"
+    mkdir -p "$CCACHE_SHIM"
+    for COMP in clang clang++; do
+        REAL="$(command -v "$COMP" || true)"
+        [ -n "$REAL" ] || REAL="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/$COMP"
+        printf '#!/bin/sh\nexec ccache %s "$@"\n' "$REAL" > "$CCACHE_SHIM/$COMP"
+        chmod +x "$CCACHE_SHIM/$COMP"
+    done
+    export PATH="$CCACHE_SHIM:$PATH"
+    echo "    ccache shims active: $CCACHE_SHIM/clang -> $(ccache --version | head -1)"
+else
+    echo "    ccache not found - building without compile cache"
+fi
+
 cmake \
     -G Ninja \
     -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" \
