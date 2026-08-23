@@ -1,0 +1,491 @@
+diff --git a/src/bake/DevServer.zig b/src/bake/DevServer.zig
+index 4265020..e3d3403 100644
+--- a/src/bake/DevServer.zig
++++ b/src/bake/DevServer.zig
+@@ -7928,7 +7928,7 @@ pub const SourceMapStore = struct {
+ 
+     pub fn sweepWeakRefs(timer: *EventLoopTimer, now_ts: *const bun.timespec) EventLoopTimer.Arm {
+         mapLog("sweepWeakRefs", .{});
+-        const store: *SourceMapStore = @fieldParentPtr("weak_ref_sweep_timer", timer);
++        const store: *SourceMapStore = @alignCast(@fieldParentPtr("weak_ref_sweep_timer", timer));
+         assert(store.owner().magic == .valid);
+ 
+         const now: u64 = @max(now_ts.sec, 0);
+diff --git a/src/bun.js/ModuleLoader.zig b/src/bun.js/ModuleLoader.zig
+index 48845db..90b2014 100644
+--- a/src/bun.js/ModuleLoader.zig
++++ b/src/bun.js/ModuleLoader.zig
+@@ -2147,7 +2147,7 @@ pub const RuntimeTranspilerStore = struct {
+         } else {
+             return;
+         }
+-        var vm: *VirtualMachine = @fieldParentPtr("transpiler_store", this);
++        var vm: *VirtualMachine = @alignCast(@fieldParentPtr("transpiler_store", this));
+         const event_loop = vm.eventLoop();
+         const global = vm.global;
+         const jsc_vm = vm.jsc;
+@@ -2303,7 +2303,7 @@ pub const RuntimeTranspilerStore = struct {
+         }
+ 
+         pub fn runFromWorkerThread(work_task: *JSC.WorkPoolTask) void {
+-            @as(*TranspilerJob, @fieldParentPtr("work_task", work_task)).run();
++            @as(*TranspilerJob, @alignCast(@fieldParentPtr("work_task", work_task))).run();
+         }
+ 
+         pub fn run(this: *TranspilerJob) void {
+diff --git a/src/bun.js/api/bun/subprocess.zig b/src/bun.js/api/bun/subprocess.zig
+index 7e3a53f..2a6691e 100644
+--- a/src/bun.js/api/bun/subprocess.zig
++++ b/src/bun.js/api/bun/subprocess.zig
+@@ -1242,7 +1242,7 @@ const Writable = union(enum) {
+     // When the stream has closed we need to be notified to prevent a use-after-free
+     // We can test for this use-after-free by enabling hot module reloading on a file and then saving it twice
+     pub fn onClose(this: *Writable, _: ?bun.sys.Error) void {
+-        const process: *Subprocess = @fieldParentPtr("stdin", this);
++        const process: *Subprocess = @alignCast(@fieldParentPtr("stdin", this));
+ 
+         if (process.this_jsvalue != .zero) {
+             if (js.stdinGetCached(process.this_jsvalue)) |existing_value| {
+@@ -1431,7 +1431,7 @@ const Writable = union(enum) {
+     }
+ 
+     pub fn finalize(this: *Writable) void {
+-        const subprocess: *Subprocess = @fieldParentPtr("stdin", this);
++        const subprocess: *Subprocess = @alignCast(@fieldParentPtr("stdin", this));
+         if (subprocess.this_jsvalue != .zero) {
+             if (JSC.Codegen.JSSubprocess.stdinGetCached(subprocess.this_jsvalue)) |existing_value| {
+                 JSC.WebCore.FileSink.JSSink.setDestroyCallback(existing_value, 0);
+diff --git a/src/bun.js/api/crypto/PBKDF2.zig b/src/bun.js/api/crypto/PBKDF2.zig
+index 2708940..ee8c985 100644
+--- a/src/bun.js/api/crypto/PBKDF2.zig
++++ b/src/bun.js/api/crypto/PBKDF2.zig
+@@ -45,7 +45,7 @@ pub const Job = struct {
+     pub const new = bun.TrivialNew(@This());
+ 
+     pub fn runTask(task: *JSC.WorkPoolTask) void {
+-        const job: *PBKDF2.Job = @fieldParentPtr("task", task);
++        const job: *PBKDF2.Job = @alignCast(@fieldParentPtr("task", task));
+         defer job.vm.enqueueTaskConcurrent(JSC.ConcurrentTask.create(job.any_task.task()));
+         job.output = bun.default_allocator.alloc(u8, @as(usize, @intCast(job.pbkdf2.length))) catch {
+             job.err = BoringSSL.EVP_R_MEMORY_LIMIT_EXCEEDED;
+diff --git a/src/bun.js/event_loop.zig b/src/bun.js/event_loop.zig
+index 4ee693d..37ddf41 100644
+--- a/src/bun.js/event_loop.zig
++++ b/src/bun.js/event_loop.zig
+@@ -60,7 +60,7 @@ pub fn ConcurrentPromiseTask(comptime Context: type) type {
+         }
+ 
+         pub fn runFromThreadPool(task: *WorkPoolTask) void {
+-            var this: *This = @fieldParentPtr("task", task);
++            var this: *This = @alignCast(@fieldParentPtr("task", task));
+             Context.run(this.ctx);
+             this.onFinish();
+         }
+@@ -126,7 +126,7 @@ pub fn WorkTask(comptime Context: type) type {
+ 
+         pub fn runFromThreadPool(task: *TaskType) void {
+             JSC.markBinding(@src());
+-            const this: *This = @fieldParentPtr("task", task);
++            const this: *This = @alignCast(@fieldParentPtr("task", task));
+             Context.run(this.ctx, this);
+         }
+ 
+@@ -320,7 +320,7 @@ pub const ConcurrentCppTask = struct {
+     };
+ 
+     pub fn runFromWorkpool(task: *JSC.WorkPoolTask) void {
+-        const this: *ConcurrentCppTask = @fieldParentPtr("workpool_task", task);
++        const this: *ConcurrentCppTask = @alignCast(@fieldParentPtr("workpool_task", task));
+         // Extract all the info we need from `this` and `cpp_task` before we call functions that
+         // free them
+         const cpp_task = this.cpp_task;
+diff --git a/src/bun.js/node/node_crypto_binding.zig b/src/bun.js/node/node_crypto_binding.zig
+index c45c62f..62a7a99 100644
+--- a/src/bun.js/node/node_crypto_binding.zig
++++ b/src/bun.js/node/node_crypto_binding.zig
+@@ -58,7 +58,7 @@ fn ExternCryptoJob(comptime name: []const u8) type {
+         }
+ 
+         pub fn runTask(task: *JSC.WorkPoolTask) void {
+-            const job: *@This() = @fieldParentPtr("task", task);
++            const job: *@This() = @alignCast(@fieldParentPtr("task", task));
+             var vm = job.vm;
+             defer vm.enqueueTaskConcurrent(JSC.ConcurrentTask.create(job.any_task.task()));
+ 
+@@ -161,7 +161,7 @@ fn CryptoJob(comptime Ctx: type) type {
+         }
+ 
+         pub fn runTask(task: *JSC.WorkPoolTask) void {
+-            const job: *@This() = @fieldParentPtr("task", task);
++            const job: *@This() = @alignCast(@fieldParentPtr("task", task));
+             var vm = job.vm;
+             defer vm.enqueueTaskConcurrent(JSC.ConcurrentTask.create(job.any_task.task()));
+ 
+diff --git a/src/bun.js/webcore/blob/write_file.zig b/src/bun.js/webcore/blob/write_file.zig
+index fd17922..27cad56 100644
+--- a/src/bun.js/webcore/blob/write_file.zig
++++ b/src/bun.js/webcore/blob/write_file.zig
+@@ -31,7 +31,7 @@ pub const WriteFile = struct {
+     pub const open_flags = bun.O.WRONLY | bun.O.CREAT | bun.O.TRUNC | bun.O.NONBLOCK;
+ 
+     pub fn onWritable(request: *io.Request) void {
+-        var this: *WriteFile = @fieldParentPtr("io_request", request);
++        var this: *WriteFile = @alignCast(@fieldParentPtr("io_request", request));
+         this.onReady();
+     }
+ 
+@@ -52,7 +52,7 @@ pub const WriteFile = struct {
+     pub fn onRequestWritable(request: *io.Request) io.Action {
+         bloblog("WriteFile.onRequestWritable()", .{});
+         request.scheduled = false;
+-        var this: *WriteFile = @fieldParentPtr("io_request", request);
++        var this: *WriteFile = @alignCast(@fieldParentPtr("io_request", request));
+         return io.Action{
+             .writable = .{
+                 .onError = @ptrCast(&onIOError),
+@@ -281,7 +281,7 @@ pub const WriteFile = struct {
+     }
+ 
+     fn doWriteLoopTask(task: *JSC.WorkPoolTask) void {
+-        var this: *WriteFile = @fieldParentPtr("task", task);
++        var this: *WriteFile = @alignCast(@fieldParentPtr("task", task));
+         // On macOS, we use one-shot mode, so we don't need to unregister.
+         if (comptime Environment.isMac) {
+             this.close_after_io = false;
+@@ -444,7 +444,7 @@ pub const WriteFileWindows = struct {
+     }
+ 
+     pub fn onOpen(req: *uv.fs_t) callconv(.C) void {
+-        var this: *WriteFileWindows = @fieldParentPtr("io_request", req);
++        var this: *WriteFileWindows = @alignCast(@fieldParentPtr("io_request", req));
+         bun.assert(this == @as(*WriteFileWindows, @alignCast(@ptrCast(req.data.?))));
+         const rc = this.io_request.result;
+         if (comptime Environment.allow_assert)
+@@ -511,7 +511,7 @@ pub const WriteFileWindows = struct {
+     }
+ 
+     fn onWriteComplete(req: *uv.fs_t) callconv(.C) void {
+-        var this: *WriteFileWindows = @fieldParentPtr("io_request", req);
++        var this: *WriteFileWindows = @alignCast(@fieldParentPtr("io_request", req));
+         bun.assert(this == @as(*WriteFileWindows, @alignCast(@ptrCast(req.data.?))));
+         const rc = this.io_request.result;
+         if (rc.errno()) |err| {
+diff --git a/src/http.zig b/src/http.zig
+index 8401a55..fcbc60a 100644
+--- a/src/http.zig
++++ b/src/http.zig
+@@ -1513,7 +1513,7 @@ pub const HTTPThread = struct {
+         {
+             var batch_ = batch;
+             while (batch_.pop()) |task| {
+-                const http: *AsyncHTTP = @fieldParentPtr("task", task);
++                const http: *AsyncHTTP = @alignCast(@fieldParentPtr("task", task));
+                 this.queued_tasks.push(http);
+             }
+         }
+@@ -2849,7 +2849,7 @@ pub const AsyncHTTP = struct {
+         } else {
+             {
+                 this.client.deinit();
+-                var threadlocal_http: *ThreadlocalAsyncHTTP = @fieldParentPtr("async_http", async_http);
++                var threadlocal_http: *ThreadlocalAsyncHTTP = @alignCast(@fieldParentPtr("async_http", async_http));
+                 defer threadlocal_http.deinit();
+                 log("onAsyncHTTPCallback: {any}", .{std.fmt.fmtDuration(this.elapsed)});
+                 callback.function(callback.ctx, async_http, result);
+@@ -2865,7 +2865,7 @@ pub const AsyncHTTP = struct {
+     }
+ 
+     pub fn startAsyncHTTP(task: *Task) void {
+-        var this: *AsyncHTTP = @fieldParentPtr("task", task);
++        var this: *AsyncHTTP = @alignCast(@fieldParentPtr("task", task));
+         this.onStart();
+     }
+ 
+@@ -3184,7 +3184,7 @@ pub fn onPreconnect(this: *HTTPClient, comptime is_ssl: bool, socket: NewHTTPCon
+     this.state.request_stage = .done;
+     this.state.stage = .done;
+     this.flags.proxy_tunneling = false;
+-    this.result_callback.run(@fieldParentPtr("client", this), HTTPClientResult{ .fail = null, .metadata = null, .has_more = false });
++    this.result_callback.run(@alignCast(@fieldParentPtr("client", this)), HTTPClientResult{ .fail = null, .metadata = null, .has_more = false });
+ }
+ 
+ fn estimatedRequestHeaderByteLength(this: *const HTTPClient) usize {
+@@ -3805,7 +3805,7 @@ fn completeConnectingProcess(this: *HTTPClient) void {
+             this.state.reset(this.allocator);
+             this.flags.proxy_tunneling = false;
+ 
+-            callback.run(@fieldParentPtr("client", this), result);
++            callback.run(@alignCast(@fieldParentPtr("client", this)), result);
+         }
+     }
+ }
+@@ -3830,7 +3830,7 @@ fn fail(this: *HTTPClient, err: anyerror) void {
+             this.state.reset(this.allocator);
+             this.flags.proxy_tunneling = false;
+ 
+-            callback.run(@fieldParentPtr("client", this), result);
++            callback.run(@alignCast(@fieldParentPtr("client", this)), result);
+         }
+     }
+ }
+@@ -3918,7 +3918,7 @@ pub fn progressUpdate(this: *HTTPClient, comptime is_ssl: bool, ctx: *NewHTTPCon
+         }
+ 
+         result.body.?.* = body;
+-        callback.run(@fieldParentPtr("client", this), result);
++        callback.run(@alignCast(@fieldParentPtr("client", this)), result);
+ 
+         if (comptime print_every > 0) {
+             print_every_i += 1;
+diff --git a/src/install/install.zig b/src/install/install.zig
+index 389fdee..3f5c81f 100644
+--- a/src/install/install.zig
++++ b/src/install/install.zig
+@@ -707,7 +707,7 @@ pub const Task = struct {
+         Output.Source.configureThread();
+         defer Output.flush();
+ 
+-        var this: *Task = @fieldParentPtr("threadpool_task", task);
++        var this: *Task = @alignCast(@fieldParentPtr("threadpool_task", task));
+         const manager = this.package_manager;
+         defer {
+             if (this.status == .success) {
+@@ -1786,7 +1786,7 @@ pub fn NewPackageInstall(comptime kind: PkgInstallKind) type {
+             }
+ 
+             pub fn runFromThreadPool(task: *bun.JSC.WorkPoolTask) void {
+-                var iter: *@This() = @fieldParentPtr("task", task);
++                var iter: *@This() = @alignCast(@fieldParentPtr("task", task));
+                 defer queue.completeOne();
+                 if (iter.run()) |err| {
+                     iter.err = err;
+@@ -2149,7 +2149,7 @@ pub fn NewPackageInstall(comptime kind: PkgInstallKind) type {
+                         task: JSC.WorkPoolTask = .{ .callback = &run },
+ 
+                         pub fn run(task: *JSC.WorkPoolTask) void {
+-                            var unintall_task: *@This() = @fieldParentPtr("task", task);
++                            var unintall_task: *@This() = @alignCast(@fieldParentPtr("task", task));
+                             var debug_timer = bun.Output.DebugTimer.start();
+                             defer {
+                                 _ = PackageManager.get().decrementPendingTasks();
+diff --git a/src/install/patch_install.zig b/src/install/patch_install.zig
+index e2cbb29..bbb13f1 100644
+--- a/src/install/patch_install.zig
++++ b/src/install/patch_install.zig
+@@ -118,7 +118,7 @@ pub const PatchTask = struct {
+     }
+ 
+     pub fn runFromThreadPool(task: *ThreadPool.Task) void {
+-        var patch_task: *PatchTask = @fieldParentPtr("task", task);
++        var patch_task: *PatchTask = @alignCast(@fieldParentPtr("task", task));
+         patch_task.runFromThreadPoolImpl();
+     }
+ 
+diff --git a/src/js_ast.zig b/src/js_ast.zig
+index 9f50df2..5140e86 100644
+--- a/src/js_ast.zig
++++ b/src/js_ast.zig
+@@ -98,7 +98,7 @@ pub fn NewStore(comptime types: []const type, comptime count: usize) type {
+         };
+ 
+         pub fn firstBlock(store: *Store) *Block {
+-            return &@as(*PreAlloc, @fieldParentPtr("metadata", store)).first_block;
++            return &@as(*PreAlloc, @alignCast(@fieldParentPtr("metadata", store))).first_block;
+         }
+ 
+         pub fn init() *Store {
+@@ -125,7 +125,7 @@ pub fn NewStore(comptime types: []const type, comptime count: usize) type {
+                 backing_allocator.destroy(next);
+             }
+ 
+-            const prealloc: PreAlloc = @fieldParentPtr("metadata", store);
++            const prealloc: PreAlloc = @alignCast(@fieldParentPtr("metadata", store));
+             bun.assert(&prealloc.first_block == store.head);
+             backing_allocator.destroy(prealloc);
+         }
+diff --git a/src/napi/napi.zig b/src/napi/napi.zig
+index fff0bbd..c54ab9b 100644
+--- a/src/napi/napi.zig
++++ b/src/napi/napi.zig
+@@ -1080,7 +1080,7 @@ pub const napi_async_work = struct {
+     }
+ 
+     pub fn runFromThreadPool(task: *WorkPoolTask) void {
+-        var this: *napi_async_work = @fieldParentPtr("task", task);
++        var this: *napi_async_work = @alignCast(@fieldParentPtr("task", task));
+ 
+         this.run();
+     }
+diff --git a/src/shell/builtin/cp.zig b/src/shell/builtin/cp.zig
+index 9816fab..9dc00cc 100644
+--- a/src/shell/builtin/cp.zig
++++ b/src/shell/builtin/cp.zig
+@@ -207,7 +207,7 @@ pub fn onIOWriterChunk(this: *Cp, _: usize, e: ?JSC.SystemError) void {
+ 
+ pub inline fn bltn(this: *@This()) *Builtin {
+     const impl: *Builtin.Impl = @alignCast(@fieldParentPtr("cp", this));
+-    return @fieldParentPtr("impl", impl);
++    return @alignCast(@fieldParentPtr("impl", impl));
+ }
+ 
+ pub fn onShellCpTaskDone(this: *Cp, task: *ShellCpTask) void {
+@@ -429,7 +429,7 @@ pub const ShellCpTask = struct {
+ 
+     pub fn runFromThreadPool(task: *WorkPoolTask) void {
+         debug("runFromThreadPool", .{});
+-        var this: *@This() = @fieldParentPtr("task", task);
++        var this: *@This() = @alignCast(@fieldParentPtr("task", task));
+         if (this.runFromThreadPoolImpl()) |e| {
+             this.err = e;
+             this.enqueueToEventLoop();
+diff --git a/src/shell/builtin/ls.zig b/src/shell/builtin/ls.zig
+index a8b083d..27cf150 100644
+--- a/src/shell/builtin/ls.zig
++++ b/src/shell/builtin/ls.zig
+@@ -322,7 +322,7 @@ pub const ShellLsTask = struct {
+     }
+ 
+     pub fn workPoolCallback(task: *JSC.WorkPoolTask) void {
+-        var this: *@This() = @fieldParentPtr("task", task);
++        var this: *@This() = @alignCast(@fieldParentPtr("task", task));
+         this.run();
+         this.doneLogic();
+     }
+@@ -774,7 +774,7 @@ pub fn parseFlag(this: *Ls, flag: []const u8) union(enum) { continue_parsing, do
+ 
+ pub inline fn bltn(this: *Ls) *Builtin {
+     const impl: *Builtin.Impl = @alignCast(@fieldParentPtr("ls", this));
+-    return @fieldParentPtr("impl", impl);
++    return @alignCast(@fieldParentPtr("impl", impl));
+ }
+ 
+ const Ls = @This();
+diff --git a/src/shell/builtin/mkdir.zig b/src/shell/builtin/mkdir.zig
+index 9f5b8cb..161fb3b 100644
+--- a/src/shell/builtin/mkdir.zig
++++ b/src/shell/builtin/mkdir.zig
+@@ -235,7 +235,7 @@ pub const ShellMkdirTask = struct {
+     }
+ 
+     fn runFromThreadPool(task: *JSC.WorkPoolTask) void {
+-        var this: *ShellMkdirTask = @fieldParentPtr("task", task);
++        var this: *ShellMkdirTask = @alignCast(@fieldParentPtr("task", task));
+         debug("{} runFromThreadPool", .{this});
+ 
+         // We have to give an absolute path to our mkdir
+@@ -373,7 +373,7 @@ const Opts = struct {
+ 
+ pub inline fn bltn(this: *Mkdir) *Builtin {
+     const impl: *Builtin.Impl = @alignCast(@fieldParentPtr("mkdir", this));
+-    return @fieldParentPtr("impl", impl);
++    return @alignCast(@fieldParentPtr("impl", impl));
+ }
+ 
+ // --
+diff --git a/src/shell/builtin/rm.zig b/src/shell/builtin/rm.zig
+index 26b3c1f..737a38b 100644
+--- a/src/shell/builtin/rm.zig
++++ b/src/shell/builtin/rm.zig
+@@ -334,7 +334,7 @@ pub fn deinit(this: *Rm) void {
+ 
+ pub inline fn bltn(this: *Rm) *Builtin {
+     const impl: *Builtin.Impl = @alignCast(@fieldParentPtr("rm", this));
+-    return @fieldParentPtr("impl", impl);
++    return @alignCast(@fieldParentPtr("impl", impl));
+ }
+ 
+ const ParseFlagsResult = enum {
+@@ -538,7 +538,7 @@ pub const ShellRmTask = struct {
+         }
+ 
+         pub fn runFromThreadPool(task: *JSC.WorkPoolTask) void {
+-            var this: *DirTask = @fieldParentPtr("task", task);
++            var this: *DirTask = @alignCast(@fieldParentPtr("task", task));
+             this.runFromThreadPoolImpl();
+         }
+ 
+diff --git a/src/shell/builtin/touch.zig b/src/shell/builtin/touch.zig
+index 3b96cea..c4efd7b 100644
+--- a/src/shell/builtin/touch.zig
++++ b/src/shell/builtin/touch.zig
+@@ -225,7 +225,7 @@ pub const ShellTouchTask = struct {
+     }
+ 
+     fn runFromThreadPool(task: *JSC.WorkPoolTask) void {
+-        var this: *ShellTouchTask = @fieldParentPtr("task", task);
++        var this: *ShellTouchTask = @alignCast(@fieldParentPtr("task", task));
+         debug("{} runFromThreadPool", .{this});
+ 
+         // We have to give an absolute path
+@@ -389,7 +389,7 @@ const Opts = struct {
+ 
+ pub inline fn bltn(this: *Touch) *Builtin {
+     const impl: *Builtin.Impl = @alignCast(@fieldParentPtr("touch", this));
+-    return @fieldParentPtr("impl", impl);
++    return @alignCast(@fieldParentPtr("impl", impl));
+ }
+ 
+ // --
+diff --git a/src/shell/interpreter.zig b/src/shell/interpreter.zig
+index 0ee43b6..0f99fa9 100644
+--- a/src/shell/interpreter.zig
++++ b/src/shell/interpreter.zig
+@@ -2173,7 +2173,7 @@ pub const Interpreter = struct {
+ 
+             pub fn runFromThreadPool(task: *WorkPoolTask) void {
+                 debug("runFromThreadPool", .{});
+-                var this: *This = @fieldParentPtr("task", task);
++                var this: *This = @alignCast(@fieldParentPtr("task", task));
+                 switch (this.walkImpl()) {
+                     .result => {},
+                     .err => |e| {
+@@ -5142,7 +5142,7 @@ pub fn ShellTask(
+         pub fn onFinish(this: *@This()) void {
+             debug("onFinish", .{});
+             if (this.event_loop == .js) {
+-                const ctx: *Ctx = @fieldParentPtr("task", this);
++                const ctx: *Ctx = @alignCast(@fieldParentPtr("task", this));
+                 this.event_loop.js.enqueueTaskConcurrent(this.concurrent_task.js.from(ctx, .manual_deinit));
+             } else {
+                 const ctx = this;
+@@ -5152,15 +5152,15 @@ pub fn ShellTask(
+ 
+         pub fn runFromThreadPool(task: *WorkPoolTask) void {
+             debug("runFromThreadPool", .{});
+-            var this: *@This() = @fieldParentPtr("task", task);
+-            const ctx: *Ctx = @fieldParentPtr("task", this);
++            var this: *@This() = @alignCast(@fieldParentPtr("task", task));
++            const ctx: *Ctx = @alignCast(@fieldParentPtr("task", this));
+             runFromThreadPool_(ctx);
+             this.onFinish();
+         }
+ 
+         pub fn runFromMainThread(this: *@This()) void {
+             debug("runFromJS", .{});
+-            const ctx: *Ctx = @fieldParentPtr("task", this);
++            const ctx: *Ctx = @alignCast(@fieldParentPtr("task", this));
+             this.ref.unref(this.event_loop);
+             runFromMainThread_(ctx);
+         }
+diff --git a/src/shell/subproc.zig b/src/shell/subproc.zig
+index 9f71903..8a33010 100644
+--- a/src/shell/subproc.zig
++++ b/src/shell/subproc.zig
+@@ -269,7 +269,7 @@ pub const ShellSubprocess = struct {
+         }
+ 
+         pub fn finalize(this: *Writable) void {
+-            const subprocess: *Subprocess = @fieldParentPtr("stdin", this);
++            const subprocess: *Subprocess = @alignCast(@fieldParentPtr("stdin", this));
+             if (subprocess.this_jsvalue != .zero) {
+                 if (JSC.Codegen.JSSubprocess.stdinGetCached(subprocess.this_jsvalue)) |existing_value| {
+                     JSC.WebCore.FileSink.JSSink.setDestroyCallback(existing_value, 0);
+@@ -1042,7 +1042,7 @@ pub const PipeReader = struct {
+         }
+ 
+         pub fn parent(this: *CapturedWriter) *PipeReader {
+-            return @fieldParentPtr("captured_writer", this);
++            return @alignCast(@fieldParentPtr("captured_writer", this));
+         }
+ 
+         pub fn eventLoop(this: *CapturedWriter) JSC.EventLoopHandle {

@@ -150,6 +150,12 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # valkey integer-width: std.fmt.count returns u64, but usize is u32 on armv7
     echo ">>> Applying Bun 32-bit valkey integer-width patch..."
     git apply "$REPO_ROOT/patches/bun/android-arm32-valkey-size.patch"
+    # @fieldParentPtr alignment: task/timer callbacks embed a lower-alignment
+    # field pointer; on 32-bit the parent struct is align(8) so Zig rejects the
+    # implicit alignment increase. Assert it with @alignCast (parents own their
+    # allocations, so every live instance satisfies natural alignment).
+    echo ">>> Applying Bun 32-bit fieldParentPtr alignment wave patch..."
+    git apply "$REPO_ROOT/patches/bun/android-arm32-zig-aligncast2.patch"
 fi
 
 # Enable incremental ninja resume across runs. bun-src is freshly cloned every
