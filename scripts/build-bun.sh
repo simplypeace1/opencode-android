@@ -151,8 +151,13 @@ apply_zlib_arm32_patch() {
     debug_zlib_state
     (
         cd "$BUN_SRC/vendor/zlib" || exit 1
-        if git apply --check "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" 2>/dev/null; then
-            git apply "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" || exit 1
+        # NOTE: use patch(1), NOT git apply. Inside the bun-src worktree,
+        # git apply has been observed to exit 0 while leaving ignored
+        # untracked files untouched (sha/mtime probes proved it); bun's own
+        # GitClone.cmake passes --no-index to git apply for the same reason.
+        if patch -p1 --dry-run < "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" >/dev/null 2>&1; then
+            patch -p1 < "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" || exit 1
+            debug_zlib_state
             echo "    zlib arm32 patch applied."
         elif grep -q "defined(__arm__)" deflate.c && grep -q "Generic 32-bit fallback" deflate.c; then
             echo "    zlib arm32 patch already applied."
