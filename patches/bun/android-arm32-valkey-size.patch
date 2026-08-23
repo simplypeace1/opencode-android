@@ -1,12 +1,13 @@
 diff --git a/src/valkey/ValkeyCommand.zig b/src/valkey/ValkeyCommand.zig
-index xxxxxxx..yyyyyyy 100644
+index 47d8885..1648420 100644
 --- a/src/valkey/ValkeyCommand.zig
 +++ b/src/valkey/ValkeyCommand.zig
-@@ -37,7 +37,7 @@ pub fn byteLength(this: *const Command) usize {
- 
- pub fn byteLength(this: *const Command) usize {
--    return std.fmt.count("{}", .{this});
-+    return @as(usize, @intCast(std.fmt.count("{}", .{this})));
+@@ -38,7 +38,7 @@ pub fn format(this: Command, comptime _: []const u8, _: std.fmt.FormatOptions, w
  }
  
- pub fn create(this: *Command) !Command {
+ pub fn byteLength(this: *const Command) usize {
+-    return std.fmt.count("{}", .{this.*});
++    return @intCast(std.fmt.count("{}", .{this.*}));
+ }
+ 
+ pub fn serialize(this: *const Command, allocator: std.mem.Allocator) ![]u8 {

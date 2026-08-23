@@ -136,13 +136,18 @@ else
 fi
 
 ### Zlib arm32 SIMD fix (after vendor is fetched by clone-zig)
-if [ "$ANDROID_ABI" = "armeabi-v7a" ]; then
-    echo ">>> Patching zlib for arm32..."
+ZLIB_DEFLATE="$BUN_SRC/vendor/zlib/deflate.c"
+if [ "$ANDROID_ABI" = "armeabi-v7a" ] && [ -f "$ZLIB_DEFLATE" ]; then
+    echo ">>> Patching zlib deflate.c for arm32..."
     cd "$BUN_SRC/vendor/zlib"
-    if ! git apply --check "$ROOT/patches/bun/android-arm32-zlib.patch"; then
-        echo "zlib patch already applied or does not apply"
+    if git apply --check "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" 2>/dev/null; then
+        git apply "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch"
+        echo "    zlib arm32 patch applied."
+    elif grep -q "defined(__arm__)" deflate.c && grep -q "Generic 32-bit fallback" deflate.c; then
+        echo "    zlib arm32 patch already applied."
     else
-        git apply "$ROOT/patches/bun/android-arm32-zlib.patch"
+        echo "ERROR: zlib patch does not apply and deflate.c is in an unexpected state." >&2
+        exit 1
     fi
 fi
 

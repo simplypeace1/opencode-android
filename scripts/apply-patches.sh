@@ -143,11 +143,6 @@ if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     # cast and byteLen sites across the codebase
     echo ">>> Applying Bun 32-bit u52/usize/size-format fixes patch..."
     git apply "$REPO_ROOT/patches/bun/android-arm32-zig-u52-fmt.patch"
-    # zlib SIMD optimizations (ARM_NEON_SIMD) only support 64-bit ARM (aarch64)
-    # On 32-bit ARM (armv7), the deflate.c SIMD path triggers a compile error.
-    echo ">>> Applying Bun 32-bit zlib SIMD disable patch..."
-    git apply "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch"
-    # valkey @fieldParentPtr alignment: on 32-bit ARM, pointer alignment is 4
     # valkey @fieldParentPtr alignment: on 32-bit ARM, pointer alignment is 4
     # but the code expects 8. Use @alignCast to preserve alignment.
     echo ">>> Applying Bun 32-bit valkey @fieldParentPtr alignment patch..."

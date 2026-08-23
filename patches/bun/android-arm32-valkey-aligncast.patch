@@ -1,12 +1,13 @@
 diff --git a/src/valkey/valkey.zig b/src/valkey/valkey.zig
-index xxxxxxx..yyyyyyy 100644
+index c161449..7af44a0 100644
 --- a/src/valkey/valkey.zig
 +++ b/src/valkey/valkey.zig
-@@ -934,7 +934,7 @@ fn globalObject(this: *JSValkeyClient) *JSC.JSGlobalObject {
+@@ -934,7 +934,7 @@ pub const ValkeyClient = struct {
+     }
  
- fn parent(this: *JSValkeyClient) *JSValkeyClient {
--    return @fieldParentPtr("client", this);
-+    return @fieldParentPtr("client", @alignCast(this));
- }
+     inline fn parent(this: *ValkeyClient) *JSValkeyClient {
+-        return @fieldParentPtr("client", this);
++        return @alignCast(@fieldParentPtr("client", this));
+     }
  
- pub fn init(
+     inline fn globalObject(this: *ValkeyClient) *JSC.JSGlobalObject {
