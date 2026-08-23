@@ -135,6 +135,17 @@ else
     ninja clone-zig || true  # May not exist as a standalone target in all versions
 fi
 
+### Zlib arm32 SIMD fix (after vendor is fetched by clone-zig)
+if [ "$ANDROID_ABI" = "armeabi-v7a" ]; then
+    echo ">>> Patching zlib for arm32..."
+    cd "$BUN_SRC/vendor/zlib"
+    if ! git apply --check "$ROOT/patches/bun/android-arm32-zlib.patch"; then
+        echo "zlib patch already applied or does not apply"
+    else
+        git apply "$ROOT/patches/bun/android-arm32-zlib.patch"
+    fi
+fi
+
 # 32-bit: mimalloc's segment-map computes MI_SEGMENT_MAP_PART_SPAN in
 # 32-bit size_t arithmetic, where 31744 * 16MiB wraps to exactly zero —
 # a division by zero and a variable-length array at file scope. The deps

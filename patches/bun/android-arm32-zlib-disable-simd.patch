@@ -1,25 +1,22 @@
-diff --git a/vendor/zlib/deflate.c b/vendor/zlib/deflate.c
-index xxxxxxx..yyyyyyy 100644
---- a/vendor/zlib/deflate.c
-+++ b/vendor/zlib/deflate.c
-@@ -140,7 +140,9 @@
- #if defined(ARM_NEON) || defined(X86_SIMD)
- #  define ARM_NEON_SIMD
- #endif
+diff --git a/deflate.c b/deflate.c
+index d861faf..e025094 100644
+--- a/deflate.c
++++ b/deflate.c
+@@ -145,10 +145,11 @@ static uint32_t hash_func(deflate_state *s, void* str) {
+ }
  
-+#if defined(__arm__) && !defined(__aarch64__)
-+#  undef ARM_NEON_SIMD
-+#endif
+ #else
+-
+-#error "Only 64-bit Intel and ARM architectures are supported"
+-
+-#endif
++#if defined(__arm__) || defined(__thumb__) || defined(_M_ARM)
++static uint32_t hash_func(deflate_state *s, void* str) {
++    return crc32(0, (const unsigned char *)str, 4) & s->hash_mask;
++}
++#else
  
- #ifdef ARM_NEON_SIMD
- #  if defined(__ARM_NEON__) || defined(__ARM_NEON)
-@@ -149,7 +151,7 @@
- #    error "Only 64-bit Intel and ARM architectures are supported"
- #  endif
- #endif
- 
--#ifdef ARM_NEON_SIMD
-+#if defined(ARM_NEON_SIMD) && !defined(__arm__)
- 
- #  ifndef __ARM_NEON__
- #    error "ARM NEON required"
+ /* ===========================================================================
+  * Insert string str in the dictionary and return the previous head
+  * of the hash chain (the most recent string with same hash key).
+```
