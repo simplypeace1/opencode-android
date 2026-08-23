@@ -57,6 +57,13 @@ git checkout -- . 2>/dev/null || true  # Reset any previous patches
     # and DownloadUrl's REMOVE_RECURSE wipes our applied vendor patches.
     echo ">>> Applying Bun GitClone cache-skip patch..."
     git apply "$REPO_ROOT/patches/bun/android-gitclone-cache.patch"
+    # Insurance: install our zlib patch into bun's own vendor-patch directory.
+    # GitClone.cmake applies patches/<name>/*.patch after every (re)download of
+    # that repository, so if anything ever re-extracts vendor/zlib mid-build,
+    # the arm32 fix is reapplied automatically by bun's own machinery.
+    mkdir -p "$BUN_SRC/patches/zlib"
+    cp "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" \
+       "$BUN_SRC/patches/zlib/android-arm32-zlib-disable-simd.patch"
 # Apply armeabi-v7a toolchain patch (adds cmake/toolchains/android-armv7a.cmake)
 if [ "${ANDROID_ABI}" = "armeabi-v7a" ]; then
     echo ">>> Applying Bun armeabi-v7a toolchain patch..."

@@ -135,21 +135,34 @@ else
     ninja clone-zig || true  # May not exist as a standalone target in all versions
 fi
 
-### Zlib arm32 SIMD fix (after vendor is fetched by clone-zig)
+### Zlib arm32 SIMD fix (idempotent; safe to call multiple times)
 ZLIB_DEFLATE="$BUN_SRC/vendor/zlib/deflate.c"
-if [ "$ANDROID_ABI" = "armeabi-v7a" ] && [ -f "$ZLIB_DEFLATE" ]; then
-    echo ">>> Patching zlib deflate.c for arm32..."
-    cd "$BUN_SRC/vendor/zlib"
-    if git apply --check "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" 2>/dev/null; then
-        git apply "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch"
-        echo "    zlib arm32 patch applied."
-    elif grep -q "defined(__arm__)" deflate.c && grep -q "Generic 32-bit fallback" deflate.c; then
-        echo "    zlib arm32 patch already applied."
+debug_zlib_state() {
+    if [ -f "$ZLIB_DEFLATE" ]; then
+        echo "    DEBUG-ZLIB sha=$(sha256sum "$ZLIB_DEFLATE" | cut -c1-12) mtime=$(stat -c %Y "$ZLIB_DEFLATE")"
     else
-        echo "ERROR: zlib patch does not apply and deflate.c is in an unexpected state." >&2
-        exit 1
+        echo "    DEBUG-ZLIB deflate.c MISSING"
     fi
-fi
+}
+apply_zlib_arm32_patch() {
+    [ "$ANDROID_ABI" = "armeabi-v7a" ] || return 0
+    [ -f "$ZLIB_DEFLATE" ] || return 0
+    echo ">>> Patching zlib deflate.c for arm32..."
+    debug_zlib_state
+    (
+        cd "$BUN_SRC/vendor/zlib" || exit 1
+        if git apply --check "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" 2>/dev/null; then
+            git apply "$REPO_ROOT/patches/bun/android-arm32-zlib-disable-simd.patch" || exit 1
+            echo "    zlib arm32 patch applied."
+        elif grep -q "defined(__arm__)" deflate.c && grep -q "Generic 32-bit fallback" deflate.c; then
+            echo "    zlib arm32 patch already applied."
+        else
+            echo "ERROR: zlib patch does not apply and deflate.c is in an unexpected state." >&2
+            exit 1
+        fi
+    ) || exit 1
+}
+apply_zlib_arm32_patch
 
 # 32-bit: mimalloc's segment-map computes MI_SEGMENT_MAP_PART_SPAN in
 # 32-bit size_t arithmetic, where 31744 * 16MiB wraps to exactly zero —
@@ -207,6 +220,10 @@ fi
 
 # Build
 echo ">>> Building Bun (this will take 30-45 minutes)..."
+# Just-in-time re-apply: if anything re-extracted vendor/zlib between the
+# preamble and now, this catches it right before compilation.
+apply_zlib_arm32_patch
+debug_zlib_state
 echo "    .zig-cache -> $(readlink -f "$BUN_SRC/.zig-cache" 2>/dev/null || echo 'NOT A SYMLINK')"
 cd "$BUN_BUILD"
 ninja -j"$JOBS" 2>&1 || {
@@ -238,6 +255,7 @@ ninja -j"$JOBS" 2>&1 || {
         ninja -j"$JOBS"
     else
         echo "ERROR: Build failed (Zig patch was already applied — different error)"
+        debug_zlib_state
         exit 1
     fi
 }
