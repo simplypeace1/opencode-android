@@ -260,7 +260,7 @@ print_resume_report() {
     echo ""
     echo ">>> SUBBUILD RESUME REPORT (compile counts per target)"
     awk '
-        /Building C\+\+ object|Building C object/ {
+        /Building (C|CXX) object/ {
             if (match($0, /[A-Za-z0-9_.+-]+\.dir\//)) {
                 t = substr($0, RSTART, RLENGTH - 5)
                 cnt[t]++
