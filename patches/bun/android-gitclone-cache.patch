@@ -1,0 +1,24 @@
+diff --git a/cmake/scripts/GitClone.cmake b/cmake/scripts/GitClone.cmake
+index d02f022..4551ba2 100644
+--- a/cmake/scripts/GitClone.cmake
++++ b/cmake/scripts/GitClone.cmake
+@@ -22,6 +22,19 @@ endif()
+ 
+ set(GIT_DOWNLOAD_URL https://github.com/${GIT_REPOSITORY}/archive/${GIT_REF}.tar.gz)
+ 
++# Incremental CI builds re-run this script whenever the parent build system
++# regenerates (the script's mtime is newer than the cached .ref stamp), which
++# would otherwise REMOVE_RECURSE the vendor directory and wipe local patches.
++# Skip entirely when the tree is already present at the requested ref.
++if(EXISTS ${GIT_PATH}/.ref)
++  file(READ ${GIT_PATH}/.ref GIT_EXISTING_REF)
++  string(STRIP "${GIT_EXISTING_REF}" GIT_EXISTING_REF)
++  if(GIT_EXISTING_REF STREQUAL GIT_REF)
++    message(STATUS "Repository ${GIT_REPOSITORY} already at ${GIT_REF} - skipping download")
++    return()
++  endif()
++endif()
++
+ message(STATUS "Cloning ${GIT_REPOSITORY} at ${GIT_REF}...")
+ execute_process(
+   COMMAND
